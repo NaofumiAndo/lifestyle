@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ライフプランニング逆算電卓</title>
+<style>
+/* ===== 1. デザイントークン ===== */
+:root{
+  --bg:#f7f8fb; --panel:#ffffff; --border:#dde1e8; --text:#1b2230; --text-dim:#5b6472;
+  --accent:#2f6fed; --accent-dim:#e8f0fe; --good:#1a8f5e; --bad:#d64545; --warn:#c8791a;
+  --radius:10px; --shadow:0 1px 3px rgba(20,30,60,.08), 0 1px 2px rgba(20,30,60,.06);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#12141a; --panel:#1b1f29; --border:#333a48; --text:#eef1f6; --text-dim:#9aa4b4;
+    --accent:#6d9bff; --accent-dim:#1d2740; --good:#3fce93; --bad:#ff6b6b; --warn:#ffb454; }
+}
+/* ===== 2. リセット / 基本タイポグラフィ ===== */
+*,*::before,*::after{ box-sizing:border-box; }
+body{ margin:0; font-family:var(--font); background:var(--bg); color:var(--text); line-height:1.6; }
+h1,h2,h3{ margin:0 0 .5em; }
+h1{ font-size:1.3rem; } h2{ font-size:1.05rem; } h3{ font-size:.92rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.03em; }
+p{ margin:.3em 0; }
+small,.hint{ color:var(--text-dim); font-size:.82rem; }
+button{ font-family:inherit; }
+table{ border-collapse:collapse; width:100%; font-size:.86rem; }
+th,td{ padding:.4em .6em; text-align:right; border-bottom:1px solid var(--border); }
+th:first-child,td:first-child{ text-align:left; }
+a{ color:var(--accent); }
+/* ===== 3. レイアウト ===== */
+header.app-header{ padding:1rem 1.2rem; border-bottom:1px solid var(--border); background:var(--panel); }
+header.app-header p{ color:var(--text-dim); font-size:.88rem; }
+nav.wizard-steps{ display:flex; overflow-x:auto; gap:.3rem; padding:.5rem 1.2rem; background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
+nav.wizard-steps button{ flex:0 0 auto; padding:.5rem .9rem; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:999px; cursor:pointer; font-size:.85rem; white-space:nowrap; }
+nav.wizard-steps button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+.layout{ display:grid; grid-template-columns:1fr 320px; gap:1rem; padding:1rem 1.2rem 3rem; max-width:1200px; margin:0 auto; align-items:start; }
+@media (max-width: 880px){ .layout{ grid-template-columns:1fr; } aside#live-summary{ position:sticky; bottom:0; order:-1; } }
+main{ min-width:0; }
+section.step{ display:none; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.1rem; box-shadow:var(--shadow); margin-bottom:1rem; }
+section.step.active{ display:block; }
+.field-row{ display:flex; flex-wrap:wrap; gap:.8rem; margin-bottom:.7rem; }
+.field{ display:flex; flex-direction:column; gap:.25rem; flex:1 1 180px; min-width:150px; }
+.field label{ font-size:.82rem; color:var(--text-dim); }
+input[type=number], input[type=text], select{
+  padding:.45rem .55rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:.9rem;
+}
+.radio-cards{ display:flex; gap:.5rem; flex-wrap:wrap; }
+.radio-cards label{ border:1px solid var(--border); border-radius:8px; padding:.5rem .8rem; cursor:pointer; font-size:.86rem; background:var(--bg); }
+.radio-cards input{ margin-right:.35rem; }
+.radio-cards label:has(input:checked){ border-color:var(--accent); background:var(--accent-dim); }
+/* ===== 4. スライダー ===== */
+.slider-field{ margin-bottom:1rem; }
+.slider-field .slider-labels{ display:flex; justify-content:space-between; font-size:.78rem; color:var(--text-dim); margin-top:.15rem; }
+.slider-field .slider-value{ font-weight:600; color:var(--accent); }
+input[type=range]{ -webkit-appearance:none; width:100%; height:6px; border-radius:999px; background:var(--border); outline:none; }
+input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:var(--accent); cursor:grab; border:3px solid var(--panel); box-shadow:0 0 0 1px var(--accent); }
+input[type=range]::-webkit-slider-thumb:active{ cursor:grabbing; }
+input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%; background:var(--accent); cursor:grab; border:3px solid var(--panel); box-shadow:0 0 0 1px var(--accent); }
+/* ===== テンプレートカード ===== */
+.template-cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.7rem; margin-bottom:.5rem; }
+.template-card{ border:1px solid var(--border); border-radius:var(--radius); padding:.8rem; cursor:pointer; background:var(--bg); text-align:left; }
+.template-card:hover{ border-color:var(--accent); }
+.template-card h3{ margin:0 0 .3rem; color:var(--text); font-size:.95rem; text-transform:none; letter-spacing:0; }
+.template-card p{ font-size:.8rem; color:var(--text-dim); margin:0; }
+/* 子供リスト */
+.child-row{ border:1px dashed var(--border); border-radius:8px; padding:.7rem; margin-bottom:.6rem; position:relative; }
+.child-row button.remove{ position:absolute; top:.5rem; right:.5rem; background:none; border:none; color:var(--bad); cursor:pointer; font-size:.85rem; }
+.btn{ padding:.5rem .9rem; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:.86rem; }
+.btn.secondary{ background:var(--bg); color:var(--accent); }
+.toggle-advanced{ font-size:.82rem; color:var(--accent); background:none; border:none; cursor:pointer; text-decoration:underline; padding:0; margin-bottom:.6rem; }
+.advanced-panel{ display:none; border-top:1px dashed var(--border); padding-top:.7rem; margin-top:.3rem; }
+.advanced-panel.open{ display:block; }
+/* ===== 常時表示サマリー ===== */
+aside#live-summary{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:1rem; box-shadow:var(--shadow); position:sticky; top:60px; }
+.kpi{ margin-bottom:.9rem; }
+.kpi .label{ font-size:.78rem; color:var(--text-dim); }
+.kpi .value{ font-size:1.35rem; font-weight:700; }
+.kpi .value.bad{ color:var(--bad); } .kpi .value.good{ color:var(--good); }
+.kpi .sub{ font-size:.76rem; color:var(--text-dim); }
+/* ===== チャート/テーブル ===== */
+.chart-wrap{ overflow-x:auto; margin:.6rem 0; }
+svg.chart{ font-family:inherit; }
+.chart .axis line, .chart .axis path{ stroke:var(--border); }
+.chart .axis text{ fill:var(--text-dim); font-size:10px; }
+.chart .gridline{ stroke:var(--border); stroke-dasharray:2,3; }
+.tooltip{ position:fixed; background:var(--text); color:var(--bg); padding:.3rem .5rem; border-radius:6px; font-size:.78rem; pointer-events:none; display:none; z-index:50; white-space:nowrap; }
+.warn-box{ background:var(--accent-dim); border:1px solid var(--accent); border-radius:8px; padding:.6rem .8rem; font-size:.84rem; margin:.5rem 0; }
+.warn-box.danger{ border-color:var(--bad); background:rgba(214,69,69,.08); }
+/* ===== フッター / 出典 ===== */
+footer#data-sources{ max-width:1200px; margin:0 auto; padding:1rem 1.2rem 3rem; font-size:.78rem; color:var(--text-dim); }
+footer#data-sources ol{ padding-left:1.2rem; }
+footer#data-sources li{ margin-bottom:.25rem; }
+.step-nav-buttons{ display:flex; justify-content:space-between; margin-top:.8rem; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>ライフプランニング逆算電卓</h1>
+  <p>「いくら稼げるか」ではなく「どう生きたいか」から出発する。理想の暮らしを入力すると、必要な年収・貯蓄・投資額を逆算します。</p>
+</header>
+
+<nav class="wizard-steps" id="wizard-nav"></nav>
+
+<div class="layout">
+  <main id="main-steps"></main>
+
+  <aside id="live-summary" aria-live="polite">
+    <h2>現在地サマリー</h2>
+    <div class="kpi">
+      <div class="label">生涯資金ギャップ（現在価値）</div>
+      <div class="value" id="kpi-gap">-</div>
+      <div class="sub">既存貯蓄を差し引いた不足額</div>
+    </div>
+    <div class="kpi">
+      <div class="label">必要な月次投資額</div>
+      <div class="value" id="kpi-pmt">-</div>
+      <div class="sub" id="kpi-pmt-sub">退職までの積立で解消する場合</div>
+    </div>
+    <div class="kpi">
+      <div class="label">現在必要な手取り年収の目安（現在)</div>
+      <div class="value" id="kpi-income">-</div>
+      <div class="sub" id="kpi-income-sub"></div>
+    </div>
+    <div id="nisa-warning"></div>
+  </aside>
+</div>
+
+<footer id="data-sources">
+  <h2>データ出典</h2>
+  <ol id="sources-list"></ol>
+  <p>※本ツールの数値は公的統計に基づく概算シミュレーションであり、将来の実績を保証するものではありません。住宅購入価格・結婚費用・単身者の老後生活費など公的な相場データを直接得られなかった項目はユーザー入力・目安値としています。</p>
+</footer>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   A. 参照データ定数
+===================================================================== */
+const DATA_SOURCES = {
+  mext2023:  { label: '文部科学省 令和5年度子供の学習費調査（2024/12/25公表）', url: 'https://www.mext.go.jp/b_menu/toukei/chousa03/gakushuuhi/kekka/k_detail/mext_00002.html' },
+  jfc2021:   { label: '日本政策金融公庫 教育費負担の実態調査（令和3年度）', url: 'https://www.jfc.go.jp/n/findings/pdf/kyouikuhi_chousa_k_r03.pdf' },
+  seiho2025: { label: '生命保険文化センター「生活保障に関する調査」2025年度速報値', url: 'https://www.jili.or.jp/lifeplan/lifesecurity/1130.html' },
+  mhlw2024:  { label: '厚生労働省 令和6年度年金額改定・年金制度基礎資料集', url: 'https://www.mhlw.go.jp/content/12500000/001559774.pdf' },
+  boj:       { label: '日本銀行「2%の物価安定の目標」', url: 'https://www.boj.or.jp/mopo/outline/target.htm' },
+  gpif:      { label: 'GPIF 年金積立金管理運用独立行政法人 運用実績（2001〜2024年度）', url: 'https://www.gpif.go.jp/operation/' },
+  fsa:       { label: '金融庁 NISA制度', url: 'https://www.fsa.go.jp/policy/nisa2/know/index.html' },
+  nta2023:   { label: '国税庁 令和5年分民間給与実態統計調査', url: 'https://www.nta.go.jp/publication/statistics/kokuzeicho/minkan/gaiyou/2023.htm' },
+  soumu2023: { label: '総務省 令和5年住宅・土地統計調査', url: 'https://www.stat.go.jp/data/jyutaku/2023/pdf/kihon_gaiyou.pdf' },
+  kakei2023: { label: '総務省 家計調査（二人以上の世帯、2023年）', url: 'https://www.stat.go.jp/data/kakei/sokuhou/tsuki/pdf/fies_gaikyo2023.pdf' },
+};
+
+const EDUCATION_COSTS = {
+  kindergarten: { label:'幼稚園', startAge:3, years:3, public:185000, private:347000, source:'mext2023' },
+  elementary:   { label:'小学校', startAge:6, years:6, public:336000, private:1828000, source:'mext2023' },
+  juniorHigh:   { label:'中学校', startAge:12, years:3, public:542000, private:1560000, source:'mext2023' },
+  highSchool:   { label:'高校',   startAge:15, years:3, public:597752, private:1030283, source:'mext2023' },
+};
+const UNIVERSITY_COSTS = {
+  label:'大学', startAge:18, years:4, source:'jfc2021',
+  national:       { label:'国公立',     entrance:672000, annual:1035000 },
+  privateLiberal: { label:'私立文系',   entrance:818000, annual:1520000 },
+  privateScience: { label:'私立理系',   entrance:888000, annual:1832000 },
+};
+
+const REGION_INFO = {
+  tokyo23:    { label:'東京23区',       rentPerSqm:3800 },
+  metroCity:  { label:'首都圏・政令市', rentPerSqm:2600 },
+  coreCity:   { label:'地方中核市',     rentPerSqm:1900 },
+  otherRegion:{ label:'その他地方',     rentPerSqm:1400 },
+};
+const RENT_SOURCE = 'soumu2023';
+
+const RETIREMENT_MIN_MONTHLY = 239000;      // seiho2025
+const RETIREMENT_COMFORT_MONTHLY = 391000;  // seiho2025
+
+const PENSION_MODEL_COUPLE_MONTHLY = 232784; // mhlw2024 令和6年度モデル年金(夫婦2人分)
+const PENSION_BASIC_FULL_MONTHLY = 67808;    // mhlw2024 老齢基礎年金満額(1人)
+
+const BASELINE_LIVING_MONTHLY = 293997; // kakei2023 二人以上世帯 消費支出平均(月額)
+
+const INFLATION_DEFAULT = 0.02; // boj
+const RETURN_PRESETS = { conservative:0.03, standard:0.04, aggressive:0.05, gpifHistorical:0.0418 };
+const NISA_LIMITS = { tsumitateAnnual:1_200_000, growthAnnual:2_400_000, combinedAnnual:3_600_000, lifetimeTotal:18_000_000, lifetimeGrowthOnly:12_000_000 };
+
+const TEMPLATES = {
+  steady: {
+    label:'堅実プラン', desc:'地方・賃貸・公立中心・最低限の老後',
+    profile:{ currentAge:28, currentIncome:4000000, currentSavings:1000000, marriageAge:30 },
+    housing:{ tenure:'rent', region:'otherRegion', sizeSqm:55, purchasePrice:0, downPayment:0, loanYears:35, loanRate:1.0 },
+    lifestyle:{ luxury:0.3, diningOutPerWeek:1, commute:0.3 },
+    children:[ { birthParentAge:32, track:'public' }, { birthParentAge:35, track:'public' } ],
+    retirement:{ retireAge:65, level:0.0, pensionType:'model' },
+    investment:{ returnRate:0.03, inflationRate:0.02, netIncomeRatio:0.8 },
+  },
+  standard: {
+    label:'標準プラン', desc:'地方中核市・持ち家・公私混在・ややゆとりある老後',
+    profile:{ currentAge:28, currentIncome:5000000, currentSavings:2000000, marriageAge:29 },
+    housing:{ tenure:'own', region:'coreCity', sizeSqm:75, purchasePrice:35000000, downPayment:5000000, loanYears:35, loanRate:1.0 },
+    lifestyle:{ luxury:0.5, diningOutPerWeek:2, commute:0.5 },
+    children:[ { birthParentAge:31, track:'public' }, { birthParentAge:33, track:'mixed' } ],
+    retirement:{ retireAge:65, level:0.5, pensionType:'model' },
+    investment:{ returnRate:0.04, inflationRate:0.02, netIncomeRatio:0.78 },
+  },
+  urban: {
+    label:'都心共働きプラン', desc:'東京23区・私立中心・ゆとりある老後',
+    profile:{ currentAge:29, currentIncome:7000000, currentSavings:4000000, marriageAge:30 },
+    housing:{ tenure:'own', region:'tokyo23', sizeSqm:70, purchasePrice:70000000, downPayment:10000000, loanYears:35, loanRate:0.8 },
+    lifestyle:{ luxury:0.75, diningOutPerWeek:4, commute:0.7 },
+    children:[ { birthParentAge:32, track:'private' }, { birthParentAge:34, track:'private' } ],
+    retirement:{ retireAge:65, level:1.0, pensionType:'model' },
+    investment:{ returnRate:0.05, inflationRate:0.02, netIncomeRatio:0.75 },
+  },
+};
+
+const EDU_TRACK_PRESETS = {
+  public: { kindergarten:'public', elementary:'public', juniorHigh:'public', highSchool:'public', university:'national' },
+  mixed:  { kindergarten:'public', elementary:'public', juniorHigh:'public', highSchool:'public', university:'privateLiberal' },
+  private:{ kindergarten:'private', elementary:'private', juniorHigh:'private', highSchool:'private', university:'privateLiberal' },
+};
+
+/* =====================================================================
+   B. 状態
+===================================================================== */
+const state = JSON.parse(JSON.stringify(TEMPLATES.standard));
+state.activeStep = 'start';
+state.appliedTemplate = 'standard';
+
+function persistState(){
+  try{ localStorage.setItem('lifeplan_state', JSON.stringify(state)); }catch(e){}
+}
+function loadPersistedState(){
+  try{
+    const raw = localStorage.getItem('lifeplan_state');
+    if(raw){ Object.assign(state, JSON.parse(raw)); }
+  }catch(e){}
+}
+
+/* =====================================================================
+   C. 純粋な財務計算関数
+===================================================================== */
+function inflate(amount, years, rate){ return amount * Math.pow(1+rate, years); }
+function realValue(nominalAmount, years, inflationRate){ return nominalAmount / Math.pow(1+inflationRate, years); }
+function fisherReal(rNominal, inflation){ return (1+rNominal)/(1+inflation) - 1; }
+
+function amortizationPayment(principal, annualRate, years){
+  const n = years*12, i = annualRate/12;
+  if(principal<=0 || n<=0) return 0;
+  if(i===0) return principal/n;
+  return principal * i / (1 - Math.pow(1+i, -n));
+}
+function pvAnnuity(pmt, i, n){
+  if(n<=0) return 0;
+  if(i===0) return pmt*n;
+  return pmt*(1-Math.pow(1+i,-n))/i;
+}
+function fvAnnuity(pmt, i, n){
+  if(n<=0) return 0;
+  if(i===0) return pmt*n;
+  return pmt*((Math.pow(1+i,n)-1)/i);
+}
+function pmtFromPV(pv, i, n){
+  if(n<=0) return 0;
+  if(i===0) return pv/n;
+  return pv * i / (1 - Math.pow(1+i,-n));
+}
+
+/* =====================================================================
+   D. ドメイン別計算
+===================================================================== */
+function getChildEducationCostForAge(child, age, yearsFromNow, inflationRate){
+  const track = EDU_TRACK_PRESETS[child.track] || EDU_TRACK_PRESETS.public;
+  let cost = 0;
+  for(const key of ['kindergarten','elementary','juniorHigh','highSchool']){
+    const stage = EDUCATION_COSTS[key];
+    if(age>=stage.startAge && age<stage.startAge+stage.years){
+      const base = track[key]==='private' ? stage.private : stage.public;
+      cost += base;
+    }
+  }
+  if(age>=UNIVERSITY_COSTS.startAge && age<UNIVERSITY_COSTS.startAge+UNIVERSITY_COSTS.years){
+    const uniKey = track.university;
+    const uni = UNIVERSITY_COSTS[uniKey];
+    cost += uni.annual;
+    if(age===UNIVERSITY_COSTS.startAge) cost += uni.entrance;
+  }
+  return inflate(cost, yearsFromNow, inflationRate);
+}
+
+function getHousingCostForYear(t, parentAge, s){
+  const h = s.housing;
+  if(h.tenure==='rent'){
+    const region = REGION_INFO[h.region];
+    const monthlyRent = region.rentPerSqm * h.sizeSqm; // 通勤の余裕度は地域選択と合わせた参考情報としてのみ扱い、家賃計算には直接反映しない
+    return inflate(monthlyRent*12, t, s.investment.inflationRate);
+  } else {
+    const principal = Math.max(h.purchasePrice - h.downPayment, 0);
+    const monthlyPay = amortizationPayment(principal, h.loanRate/100, h.loanYears);
+    if(t < h.loanYears){
+      return monthlyPay*12; // 固定名目返済額（再インフレ調整なし）
+    }else{
+      // ローン完済後は固定資産税・維持費の概算(購入価格の0.6%/年、名目で購入時点固定 → 以後インフレ連動)
+      const maintenance = h.purchasePrice*0.006;
+      return inflate(maintenance, t, s.investment.inflationRate);
+    }
+  }
+}
+
+function getRetirementCostForYear(t, s){
+  const monthly = RETIREMENT_MIN_MONTHLY + (RETIREMENT_COMFORT_MONTHLY-RETIREMENT_MIN_MONTHLY)*s.retirement.level;
+  return inflate(monthly*12, t, s.investment.inflationRate);
+}
+
+function getPensionForYear(t, s){
+  const monthly = s.retirement.pensionType==='model' ? PENSION_MODEL_COUPLE_MONTHLY : PENSION_BASIC_FULL_MONTHLY*2;
+  return inflate(monthly*12, t, s.investment.inflationRate);
+}
+
+function getLivingCostForYear(t, s){
+  const luxuryMultiplier = 0.85 + s.lifestyle.luxury*0.5; // 0→0.85倍(質素) 〜 1→1.35倍(贅沢)
+  const diningExtra = s.lifestyle.diningOutPerWeek * 4.3 * 3500 * 12; // 週回数 x 月平均4.3週 x 1回3500円 x 12月
+  const base = BASELINE_LIVING_MONTHLY*12*luxuryMultiplier + diningExtra;
+  return inflate(base, t, s.investment.inflationRate);
+}
+
+/* =====================================================================
+   E. 年次タイムライン構築
+===================================================================== */
+function buildTimeline(s){
+  const horizonAge = 100;
+  const n = horizonAge - s.profile.currentAge;
+  const timeline = [];
+  for(let t=0;t<=n;t++){
+    const age = s.profile.currentAge + t;
+    const isRetired = age >= s.retirement.retireAge;
+    const incomeNominal = isRetired ? getPensionForYear(t,s) : inflate(s.profile.currentIncome, t, 0);
+    const livingNominal = isRetired ? getRetirementCostForYear(t,s) : getLivingCostForYear(t,s);
+    const housingNominal = isRetired ? 0 : getHousingCostForYear(t, age, s);
+    let eduNominal = 0;
+    for(const child of s.children){
+      const cAge = age - child.birthParentAge;
+      if(cAge>=0) eduNominal += getChildEducationCostForAge(child, cAge, t, s.investment.inflationRate);
+    }
+    const expense = livingNominal + housingNominal + eduNominal;
+    const netCashflow = incomeNominal - expense;
+    timeline.push({ t, age, calendarYear: new Date().getFullYear()+t, isRetired, incomeNominal, expense, livingNominal, housingNominal, eduNominal, netCashflow, requiredIncomeGross: expense / s.investment.netIncomeRatio });
+  }
+  return timeline;
+}
+
+function deriveStageBoundaries(s){
+  const stages = [];
+  stages.push({ age: s.profile.currentAge, label:'現在' });
+  if(s.profile.marriageAge>s.profile.currentAge) stages.push({ age:s.profile.marriageAge, label:'結婚' });
+  s.children.forEach((c,i)=> stages.push({ age:c.birthParentAge, label:`第${i+1}子誕生` }));
+  s.children.forEach((c,i)=> stages.push({ age:c.birthParentAge+18, label:`第${i+1}子 大学入学` }));
+  stages.push({ age:s.retirement.retireAge, label:'退職' });
+  return stages.filter(x=>x.age>=s.profile.currentAge).sort((a,b)=>a.age-b.age);
+}
+
+/* =====================================================================
+   F. 集計
+===================================================================== */
+function computeLifetimeTotals(timeline){
+  let totalNominal=0;
+  for(const row of timeline) totalNominal += Math.max(-row.netCashflow,0);
+  return { totalNominal };
+}
+function computeFundingGapPV(timeline, s){
+  // 黒字年の余剰も相殺した生涯純キャッシュフローの現在価値。
+  // 赤字年だけを合算するとPMTが過大になり、積立ロールフォワードの残高が0に収束しない(整合性が崩れる)ため、
+  // 全期間のnetCashflowを符号込みで合算する。指数はt+1(simulateNetWorthが各年の複利計算後にnetCashflowを
+  // 反映する時点=年末タイミング)に合わせる。
+  const r = s.investment.returnRate;
+  let pv=0;
+  for(const row of timeline) pv += (-row.netCashflow) / Math.pow(1+r, row.t+1);
+  return Math.max(pv - s.profile.currentSavings, 0);
+}
+function computeRequiredMonthlyInvestment(gapPV, s){
+  // simulateNetWorthは積立額を年1回(pmt*12)・年次複利で反映するため、年次の定額年金として解く
+  // (月次複利で解くと積立ロールフォワードの前提と食い違い、整合性チェックの残高が0に収束しない)。
+  const n = Math.max(s.retirement.retireAge - s.profile.currentAge, 1);
+  const annualPmt = pmtFromPV(gapPV, s.investment.returnRate, n);
+  return annualPmt/12;
+}
+function simulateNetWorth(timeline, pmt, s){
+  const r = s.investment.returnRate;
+  let balance = s.profile.currentSavings;
+  const series=[];
+  for(const row of timeline){
+    const contributing = row.age < s.retirement.retireAge;
+    balance = balance*(1+r) + (contributing? pmt*12:0) + row.netCashflow;
+    series.push({ age:row.age, balance });
+  }
+  return series;
+}
+
+/* =====================================================================
+   G. 描画
+===================================================================== */
+function fmtYen(v){
+  if(Math.abs(v)>=1e8) return (v/1e8).toFixed(2)+'億円';
+  if(Math.abs(v)>=1e4) return Math.round(v/1e4).toLocaleString()+'万円';
+  return Math.round(v).toLocaleString()+'円';
+}
+function svgEl(tag, attrs){
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+function scaleLinear(domain, range){
+  const [d0,d1]=domain, [r0,r1]=range;
+  return function(v){ return r0 + (v-d0)/(d1-d0||1) * (r1-r0); };
+}
+
+function renderLineChart(container, series, opts){
+  const w=opts.width||640, h=opts.height||220, pad={l:60,r:20,t:16,b:28};
+  container.innerHTML='';
+  const svg = svgEl('svg',{class:'chart', width:w, height:h, viewBox:`0 0 ${w} ${h}`});
+  const xs = series.map(p=>p.age);
+  const allVals = [].concat(...opts.lines.map(l=>series.map(p=>p[l.key])));
+  const yMin = Math.min(0, ...allVals), yMax = Math.max(...allVals, 1);
+  const x = scaleLinear([Math.min(...xs), Math.max(...xs)], [pad.l, w-pad.r]);
+  const y = scaleLinear([yMin, yMax], [h-pad.b, pad.t]);
+  const g = svgEl('g',{class:'axis'});
+  // gridlines + y ticks
+  const ticks=4;
+  for(let i=0;i<=ticks;i++){
+    const val = yMin + (yMax-yMin)*i/ticks;
+    const yy = y(val);
+    g.appendChild(svgEl('line',{class:'gridline', x1:pad.l, x2:w-pad.r, y1:yy, y2:yy}));
+    const t = svgEl('text',{x:pad.l-6, y:yy+3, 'text-anchor':'end'}); t.textContent = fmtYen(val); g.appendChild(t);
+  }
+  // x ticks (every ~10 years)
+  for(let i=0;i<xs.length;i+=Math.max(1,Math.round(xs.length/8))){
+    const xx = x(xs[i]);
+    const t = svgEl('text',{x:xx, y:h-6, 'text-anchor':'middle'}); t.textContent = xs[i]+'歳'; g.appendChild(t);
+  }
+  svg.appendChild(g);
+  opts.lines.forEach(line=>{
+    let d='';
+    series.forEach((p,i)=>{ d += (i===0?'M':'L') + x(p.age) + ' ' + y(p[line.key]) + ' '; });
+    svg.appendChild(svgEl('path',{d, fill:'none', stroke:line.color, 'stroke-width':2}));
+  });
+  // stage markers
+  (opts.markers||[]).forEach(m=>{
+    const xx = x(m.age);
+    svg.appendChild(svgEl('line',{x1:xx,x2:xx,y1:pad.t,y2:h-pad.b, stroke:'var(--text-dim)','stroke-dasharray':'2,3'}));
+  });
+  // hover
+  const hitRect = svgEl('rect',{x:pad.l,y:pad.t,width:(w-pad.l-pad.r),height:(h-pad.t-pad.b), fill:'transparent'});
+  const tooltip = document.getElementById('tooltip');
+  hitRect.addEventListener('mousemove', (e)=>{
+    const rect = svg.getBoundingClientRect();
+    const mx = e.clientX-rect.left;
+    const age = Math.round(scaleLinear([pad.l,w-pad.r],[Math.min(...xs),Math.max(...xs)])(mx));
+    const closest = series.reduce((a,b)=> Math.abs(b.age-age)<Math.abs(a.age-age)?b:a);
+    tooltip.style.display='block';
+    tooltip.style.left = e.clientX+12+'px';
+    tooltip.style.top = e.clientY+12+'px';
+    tooltip.textContent = closest.age+'歳: ' + opts.lines.map(l=>l.label+' '+fmtYen(closest[l.key])).join(' / ');
+  });
+  hitRect.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; });
+  svg.appendChild(hitRect);
+  container.appendChild(svg);
+}
+
+function renderBarChart(container, series, opts){
+  const w=opts.width||640, h=opts.height||180, pad={l:60,r:20,t:16,b:28};
+  container.innerHTML='';
+  const svg = svgEl('svg',{class:'chart', width:w, height:h, viewBox:`0 0 ${w} ${h}`});
+  const xs = series.map(p=>p.age);
+  const vals = series.map(p=>p[opts.key]);
+  const yMax = Math.max(...vals.map(Math.abs), 1);
+  const x = scaleLinear([Math.min(...xs), Math.max(...xs)], [pad.l, w-pad.r]);
+  const y = scaleLinear([-yMax, yMax], [h-pad.b, pad.t]);
+  const zeroY = y(0);
+  const barW = Math.max((w-pad.l-pad.r)/xs.length - 1, 1);
+  series.forEach(p=>{
+    const val = p[opts.key];
+    const yy = y(Math.max(val,0));
+    const bh = Math.abs(y(val)-zeroY);
+    svg.appendChild(svgEl('rect',{ x:x(p.age)-barW/2, y: val>=0?yy:zeroY, width:barW, height:Math.max(bh,0.5), fill: val>=0?'var(--good)':'var(--bad)' }));
+  });
+  svg.appendChild(svgEl('line',{x1:pad.l,x2:w-pad.r,y1:zeroY,y2:zeroY,stroke:'var(--border)'}));
+  container.appendChild(svg);
+}
+
+/* =====================================================================
+   計算オーケストレーション + 描画更新
+===================================================================== */
+function recompute(){
+  const warnEl0 = document.getElementById('nisa-warning');
+  if(state.retirement.retireAge <= state.profile.currentAge){
+    warnEl0.innerHTML = '<div class="warn-box danger">退職年齢は現在の年齢より後に設定してください。この条件では計算できません。</div>';
+    ['kpi-gap','kpi-pmt','kpi-income'].forEach(id=>document.getElementById(id).textContent='-');
+    return;
+  }
+  const timeline = buildTimeline(state);
+  const totals = computeLifetimeTotals(timeline);
+  const gapPV = computeFundingGapPV(timeline, state);
+  const pmt = computeRequiredMonthlyInvestment(gapPV, state);
+  const netWorth = simulateNetWorth(timeline, pmt, state);
+
+  document.getElementById('kpi-gap').textContent = fmtYen(gapPV);
+  document.getElementById('kpi-pmt').textContent = fmtYen(pmt)+'/月';
+  const currentRow = timeline[0];
+  document.getElementById('kpi-income').textContent = fmtYen(currentRow.requiredIncomeGross);
+  document.getElementById('kpi-income-sub').textContent = '現在の年収 '+fmtYen(state.profile.currentIncome)+' との差 '+fmtYen(currentRow.requiredIncomeGross-state.profile.currentIncome);
+
+  const annualPmt = pmt*12;
+  const warnEl = document.getElementById('nisa-warning');
+  if(annualPmt > NISA_LIMITS.combinedAnnual){
+    warnEl.innerHTML = `<div class="warn-box danger">必要積立額(年間${fmtYen(annualPmt)})が新NISA併用枠上限(年360万円)を超えています。超過分は課税口座での運用が必要です。</div>`;
+  } else if(annualPmt > NISA_LIMITS.tsumitateAnnual){
+    warnEl.innerHTML = `<div class="warn-box">必要積立額(年間${fmtYen(annualPmt)})はつみたて投資枠(年120万円)を超えるため、成長投資枠(年240万円)の併用が必要です。</div>`;
+  } else {
+    warnEl.innerHTML = '';
+  }
+
+  if(document.getElementById('step-results').classList.contains('active')){
+    renderResults(timeline, totals, gapPV, pmt, netWorth);
+  }
+  persistState();
+}
+
+function renderResults(timeline, totals, gapPV, pmt, netWorth){
+  document.getElementById('result-total-nominal').textContent = fmtYen(totals.totalNominal);
+  document.getElementById('result-gap-pv').textContent = fmtYen(gapPV);
+  document.getElementById('result-pmt').textContent = fmtYen(pmt)+' / 月';
+
+  const incomeChartContainer = document.getElementById('income-chart');
+  renderLineChart(incomeChartContainer, timeline, {
+    lines:[ {key:'requiredIncomeGross', label:'必要年収(概算)', color:'var(--bad)'}, {key:'incomeNominal', label:'想定収入', color:'var(--accent)'} ],
+    markers: deriveStageBoundaries(state),
+  });
+
+  const cashflowContainer = document.getElementById('cashflow-chart');
+  renderBarChart(cashflowContainer, timeline, { key:'netCashflow' });
+
+  const netWorthContainer = document.getElementById('networth-chart');
+  renderLineChart(netWorthContainer, netWorth, { lines:[ {key:'balance', label:'純資産残高', color:'var(--good)'} ] });
+
+  const stages = deriveStageBoundaries(state);
+  const tbody = document.getElementById('stage-table-body');
+  tbody.innerHTML='';
+  stages.forEach(st=>{
+    const row = timeline.find(r=>r.age===st.age) || timeline[timeline.length-1];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${st.label}(${st.age}歳)</td><td>${fmtYen(row.requiredIncomeGross)}</td><td>${fmtYen(row.incomeNominal)}</td><td>${fmtYen(row.requiredIncomeGross-row.incomeNominal)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* =====================================================================
+   H. UI構築 / イベント配線
+===================================================================== */
+const STEPS = [
+  {id:'start', label:'テンプレート'},
+  {id:'profile', label:'基本情報'},
+  {id:'housing', label:'住居・生活'},
+  {id:'family', label:'家族・教育'},
+  {id:'retirement', label:'老後'},
+  {id:'investment', label:'投資前提'},
+  {id:'results', label:'結果'},
+];
+
+function setActiveStep(id){
+  state.activeStep = id;
+  document.querySelectorAll('nav.wizard-steps button').forEach(b=>b.classList.toggle('active', b.dataset.step===id));
+  document.querySelectorAll('section.step').forEach(s=>s.classList.toggle('active', s.id==='step-'+id));
+  recompute();
+}
+
+function buildNav(){
+  const nav = document.getElementById('wizard-nav');
+  STEPS.forEach(st=>{
+    const btn = document.createElement('button');
+    btn.textContent = st.label; btn.dataset.step = st.id;
+    btn.addEventListener('click', ()=> setActiveStep(st.id));
+    nav.appendChild(btn);
+  });
+}
+
+function stepNavButtons(prevId, nextId){
+  let html = '<div class="step-nav-buttons">';
+  html += prevId ? `<button class="btn secondary" onclick="setActiveStep('${prevId}')">← 戻る</button>` : '<span></span>';
+  html += nextId ? `<button class="btn" onclick="setActiveStep('${nextId}')">次へ →</button>` : '<span></span>';
+  html += '</div>';
+  return html;
+}
+
+function buildStartStep(){
+  const el = document.createElement('section');
+  el.className='step'; el.id='step-start';
+  let cards = '<div class="template-cards">';
+  for(const key in TEMPLATES){
+    const tpl = TEMPLATES[key];
+    cards += `<button type="button" class="template-card" data-template="${key}"><h3>${tpl.label}</h3><p>${tpl.desc}</p></button>`;
+  }
+  cards += '</div>';
+  el.innerHTML = `<h2>まずはテンプレートから選ぶ</h2><p class="hint">選択後も全ての項目を自由に編集できます。こだわりたい方は各ステップの「詳細設定」で細部まで調整可能です。</p>${cards}${stepNavButtons(null,'profile')}`;
+  el.querySelectorAll('.template-card').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      const key = card.dataset.template;
+      const tpl = JSON.parse(JSON.stringify(TEMPLATES[key]));
+      Object.assign(state, tpl);
+      state.appliedTemplate = key;
+      rebuildAllSteps();
+      setActiveStep('profile');
+    });
+  });
+  return el;
+}
+
+function numField(label, value, onChange, opts={}){
+  const wrap = document.createElement('div'); wrap.className='field';
+  const lab = document.createElement('label'); lab.textContent = label; wrap.appendChild(lab);
+  const input = document.createElement('input'); input.type='number'; input.value=value;
+  if(opts.step) input.step = opts.step;
+  input.addEventListener('input', ()=>{ onChange(parseFloat(input.value)||0); recompute(); });
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function sliderField(label, value, min, max, step, valueLabelFn, onChange){
+  const wrap = document.createElement('div'); wrap.className='slider-field';
+  const lab = document.createElement('label'); lab.innerHTML = `${label}: <span class="slider-value">${valueLabelFn(value)}</span>`;
+  wrap.appendChild(lab);
+  const input = document.createElement('input'); input.type='range'; input.min=min; input.max=max; input.step=step; input.value=value;
+  input.addEventListener('input', ()=>{
+    const v = parseFloat(input.value);
+    lab.querySelector('.slider-value').textContent = valueLabelFn(v);
+    onChange(v); recompute();
+  });
+  wrap.appendChild(input);
+  wrap.appendChild(Object.assign(document.createElement('div'), {className:'slider-labels', innerHTML:'<span>質素</span><span>贅沢</span>'}));
+  return wrap;
+}
+
+function buildProfileStep(){
+  const el = document.createElement('section'); el.className='step'; el.id='step-profile';
+  el.innerHTML = '<h2>基本情報</h2>';
+  const row = document.createElement('div'); row.className='field-row';
+  row.appendChild(numField('現在の年齢', state.profile.currentAge, v=>state.profile.currentAge=v));
+  row.appendChild(numField('現在の年収（円、任意・比較用）', state.profile.currentIncome, v=>state.profile.currentIncome=v));
+  row.appendChild(numField('現在の貯蓄額（円）', state.profile.currentSavings, v=>state.profile.currentSavings=v));
+  row.appendChild(numField('結婚予定年齢（任意）', state.profile.marriageAge, v=>state.profile.marriageAge=v));
+  el.appendChild(row);
+  el.insertAdjacentHTML('beforeend', stepNavButtons('start','housing'));
+  return el;
+}
+
+function buildHousingStep(){
+  const el = document.createElement('section'); el.className='step'; el.id='step-housing';
+  el.innerHTML = '<h2>住居・生活</h2>';
+  const tenureRow = document.createElement('div'); tenureRow.className='field';
+  tenureRow.innerHTML = '<label>賃貸・持ち家</label>';
+  const radios = document.createElement('div'); radios.className='radio-cards';
+  ['rent','own'].forEach(t=>{
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="radio" name="tenure" value="${t}" ${state.housing.tenure===t?'checked':''}> ${t==='rent'?'賃貸':'持ち家'}`;
+    label.querySelector('input').addEventListener('change', ()=>{ state.housing.tenure=t; rebuildHousingDetail(); recompute(); });
+    radios.appendChild(label);
+  });
+  tenureRow.appendChild(radios);
+  el.appendChild(tenureRow);
+
+  const regionField = document.createElement('div'); regionField.className='field';
+  regionField.innerHTML = '<label>居住地域</label>';
+  const sel = document.createElement('select');
+  for(const key in REGION_INFO){ const opt=document.createElement('option'); opt.value=key; opt.textContent=REGION_INFO[key].label; if(state.housing.region===key) opt.selected=true; sel.appendChild(opt); }
+  sel.addEventListener('change', ()=>{ state.housing.region=sel.value; recompute(); });
+  regionField.appendChild(sel);
+  el.appendChild(regionField);
+
+  const detailDiv = document.createElement('div'); detailDiv.id='housing-detail';
+  el.appendChild(detailDiv);
+
+  const lifestyleH = document.createElement('h3'); lifestyleH.textContent='生活の贅沢度'; el.appendChild(lifestyleH);
+  el.appendChild(sliderField('日々の生活の贅沢度', state.lifestyle.luxury, 0, 1, 0.05,
+    v=> v<0.34?'質素':(v<0.67?'標準':'贅沢'),
+    v=>state.lifestyle.luxury=v));
+  el.appendChild(sliderField('外食・中食の頻度（週あたり回数）', state.lifestyle.diningOutPerWeek, 0, 7, 1,
+    v=>v+'回/週', v=>state.lifestyle.diningOutPerWeek=v));
+  el.appendChild(sliderField('職住距離・通勤の余裕度', state.lifestyle.commute, 0, 1, 0.05,
+    v=>v<0.34?'近距離重視':(v<0.67?'標準':'郊外でも可'),
+    v=>state.lifestyle.commute=v));
+  el.insertAdjacentHTML('beforeend', '<p class="hint">※通勤の余裕度は住居費との直接の計算には反映していません。地域選択と合わせて住まい選びの参考にしてください。</p>');
+
+  el.insertAdjacentHTML('beforeend', stepNavButtons('profile','family'));
+  rebuildHousingDetail(detailDiv);
+  return el;
+}
+function rebuildHousingDetail(container){
+  container = container || document.getElementById('housing-detail');
+  container.innerHTML='';
+  const row = document.createElement('div'); row.className='field-row';
+  row.appendChild(numField('広さ（㎡）', state.housing.sizeSqm, v=>state.housing.sizeSqm=v));
+  if(state.housing.tenure==='own'){
+    row.appendChild(numField('購入価格（円・目安値、ユーザー入力）', state.housing.purchasePrice, v=>state.housing.purchasePrice=v));
+    row.appendChild(numField('頭金（円）', state.housing.downPayment, v=>state.housing.downPayment=v));
+    row.appendChild(numField('ローン年数', state.housing.loanYears, v=>state.housing.loanYears=v));
+    row.appendChild(numField('金利（%）', state.housing.loanRate, v=>state.housing.loanRate=v, {step:0.1}));
+  }
+  container.appendChild(row);
+}
+
+function buildFamilyStep(){
+  const el = document.createElement('section'); el.className='step'; el.id='step-family';
+  el.innerHTML = '<h2>家族構成・教育</h2>';
+  const listDiv = document.createElement('div'); listDiv.id='children-list';
+  el.appendChild(listDiv);
+  const addBtn = document.createElement('button'); addBtn.className='btn secondary'; addBtn.textContent='+ 子供を追加';
+  addBtn.addEventListener('click', ()=>{ state.children.push({birthParentAge: state.profile.currentAge+5, track:'public'}); renderChildrenList(); recompute(); });
+  el.appendChild(addBtn);
+  el.insertAdjacentHTML('beforeend', stepNavButtons('housing','retirement'));
+  renderChildrenList(listDiv);
+  return el;
+}
+function renderChildrenList(container){
+  container = container || document.getElementById('children-list');
+  container.innerHTML='';
+  state.children.forEach((child, idx)=>{
+    const row = document.createElement('div'); row.className='child-row';
+    row.innerHTML = `<button class="remove" type="button">✕ 削除</button><h3>第${idx+1}子</h3>`;
+    const fr = document.createElement('div'); fr.className='field-row';
+    fr.appendChild(numField('誕生時の親の年齢', child.birthParentAge, v=>child.birthParentAge=v));
+    const trackField = document.createElement('div'); trackField.className='field';
+    trackField.innerHTML='<label>進学コース</label>';
+    const sel = document.createElement('select');
+    [['public','すべて公立・国公立大'],['mixed','公立中心・私立大学'],['private','すべて私立']].forEach(([v,l])=>{
+      const opt=document.createElement('option'); opt.value=v; opt.textContent=l; if(child.track===v) opt.selected=true; sel.appendChild(opt);
+    });
+    sel.addEventListener('change', ()=>{ child.track=sel.value; recompute(); });
+    trackField.appendChild(sel);
+    fr.appendChild(trackField);
+    row.appendChild(fr);
+    row.querySelector('.remove').addEventListener('click', ()=>{ state.children.splice(idx,1); renderChildrenList(); recompute(); });
+    container.appendChild(row);
+  });
+}
+
+function buildRetirementStep(){
+  const el = document.createElement('section'); el.className='step'; el.id='step-retirement';
+  el.innerHTML = '<h2>老後の生活</h2>';
+  const row = document.createElement('div'); row.className='field-row';
+  row.appendChild(numField('退職年齢', state.retirement.retireAge, v=>state.retirement.retireAge=v));
+  el.appendChild(row);
+  el.appendChild(sliderField('老後のゆとり度合い（最低日常生活費〜ゆとりある老後生活費）', state.retirement.level, 0, 1, 0.05,
+    v=>fmtYen(RETIREMENT_MIN_MONTHLY+(RETIREMENT_COMFORT_MONTHLY-RETIREMENT_MIN_MONTHLY)*v)+'/月',
+    v=>state.retirement.level=v));
+  const pensionField = document.createElement('div'); pensionField.className='field';
+  pensionField.innerHTML = '<label>年金受給見込み</label>';
+  const sel = document.createElement('select');
+  [['model','モデル年金（夫婦2人・厚生年金あり）232,784円/月'],['basic','老齢基礎年金のみ（夫婦2人分満額）135,616円/月']].forEach(([v,l])=>{
+    const opt=document.createElement('option'); opt.value=v; opt.textContent=l; if(state.retirement.pensionType===v) opt.selected=true; sel.appendChild(opt);
+  });
+  sel.addEventListener('change', ()=>{ state.retirement.pensionType=sel.value; recompute(); });
+  pensionField.appendChild(sel);
+  el.appendChild(pensionField);
+  el.insertAdjacentHTML('beforeend', stepNavButtons('family','investment'));
+  return el;
+}
+
+function buildInvestmentStep(){
+  const el = document.createElement('section'); el.className='step'; el.id='step-investment';
+  el.innerHTML = '<h2>投資前提</h2>';
+  const returnField = document.createElement('div'); returnField.className='field';
+  returnField.innerHTML='<label>想定運用利回り</label>';
+  const sel = document.createElement('select');
+  [['conservative','保守的 3%'],['standard','標準 4%'],['aggressive','積極的 5%'],['gpifHistorical','GPIF実績 4.18%'],['custom','カスタム']].forEach(([v,l])=>{
+    const opt=document.createElement('option'); opt.value=v; opt.textContent=l; sel.appendChild(opt);
+  });
+  const matchedPreset = Object.keys(RETURN_PRESETS).find(k=>RETURN_PRESETS[k]===state.investment.returnRate);
+  sel.value = matchedPreset || 'custom';
+  sel.addEventListener('change', ()=>{
+    if(sel.value!=='custom'){ state.investment.returnRate = RETURN_PRESETS[sel.value]; rebuildInvestmentDetail(); }
+    recompute();
+  });
+  returnField.appendChild(sel);
+  el.appendChild(returnField);
+  const detail = document.createElement('div'); detail.id='investment-detail';
+  el.appendChild(detail);
+  el.insertAdjacentHTML('beforeend', stepNavButtons('retirement','results'));
+  rebuildInvestmentDetail(detail);
+  return el;
+}
+function rebuildInvestmentDetail(container){
+  container = container || document.getElementById('investment-detail');
+  container.innerHTML='';
+  const row = document.createElement('div'); row.className='field-row';
+  row.appendChild(numField('想定運用利回り（%、カスタム調整可）', (state.investment.returnRate*100).toFixed(2), v=>state.investment.returnRate=v/100, {step:0.1}));
+  row.appendChild(numField('想定インフレ率（%）', (state.investment.inflationRate*100).toFixed(2), v=>state.investment.inflationRate=v/100, {step:0.1}));
+  row.appendChild(numField('手取り率（%、必要年収の逆算に使用）', (state.investment.netIncomeRatio*100).toFixed(1), v=>state.investment.netIncomeRatio=v/100, {step:0.5}));
+  container.appendChild(row);
+}
+
+function buildResultsStep(){
+  const el = document.createElement('section'); el.className='step'; el.id='step-results';
+  el.innerHTML = `
+    <h2>結果</h2>
+    <div class="field-row">
+      <div class="kpi"><div class="label">生涯の資金不足合計（将来価値の単純合計）</div><div class="value" id="result-total-nominal">-</div></div>
+      <div class="kpi"><div class="label">生涯資金ギャップ（現在価値）</div><div class="value" id="result-gap-pv">-</div></div>
+      <div class="kpi"><div class="label">必要な月次投資額</div><div class="value" id="result-pmt">-</div></div>
+    </div>
+    <h3>年収推移（必要年収 vs 想定収入）</h3>
+    <div class="chart-wrap" id="income-chart"></div>
+    <h3>年次キャッシュフロー（黒字/赤字）</h3>
+    <div class="chart-wrap" id="cashflow-chart"></div>
+    <h3>純資産推移シミュレーション（算出した月次投資額で積立した場合）</h3>
+    <div class="chart-wrap" id="networth-chart"></div>
+    <h3>ライフステージ別 必要年収テーブル</h3>
+    <table>
+      <thead><tr><th>ステージ</th><th>必要年収(概算)</th><th>想定収入</th><th>差分</th></tr></thead>
+      <tbody id="stage-table-body"></tbody>
+    </table>
+  `;
+  el.insertAdjacentHTML('beforeend', stepNavButtons('investment', null));
+  return el;
+}
+
+function rebuildAllSteps(){
+  const main = document.getElementById('main-steps');
+  main.innerHTML='';
+  main.appendChild(buildStartStep());
+  main.appendChild(buildProfileStep());
+  main.appendChild(buildHousingStep());
+  main.appendChild(buildFamilyStep());
+  main.appendChild(buildRetirementStep());
+  main.appendChild(buildInvestmentStep());
+  main.appendChild(buildResultsStep());
+  setActiveStep(state.activeStep);
+}
+
+function buildSources(){
+  const list = document.getElementById('sources-list');
+  list.innerHTML='';
+  Object.values(DATA_SOURCES).forEach(src=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<a href="${src.url}" target="_blank" rel="noopener">${src.label}</a>`;
+    list.appendChild(li);
+  });
+}
+
+/* =====================================================================
+   I. 初期化
+===================================================================== */
+function init(){
+  loadPersistedState();
+  buildNav();
+  rebuildAllSteps();
+  buildSources();
+  setActiveStep(state.activeStep || 'start');
+  recompute();
+}
+init();
+</script>
+</body>
+</html>
