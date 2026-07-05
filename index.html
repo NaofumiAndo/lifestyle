@@ -9,17 +9,21 @@
 :root{
   --bg:#f7f8fb; --panel:#ffffff; --border:#dde1e8; --text:#1b2230; --text-dim:#5b6472;
   --accent:#2f6fed; --accent-dim:#e8f0fe; --good:#1a8f5e; --bad:#d64545; --warn:#c8791a;
+  --series-living:#2a78d6; --series-housing:#1baf7a; --series-edu:#eda100;
   --radius:10px; --shadow:0 1px 3px rgba(20,30,60,.08), 0 1px 2px rgba(20,30,60,.06);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root{ --bg:#12141a; --panel:#1b1f29; --border:#333a48; --text:#eef1f6; --text-dim:#9aa4b4;
-    --accent:#6d9bff; --accent-dim:#1d2740; --good:#3fce93; --bad:#ff6b6b; --warn:#ffb454; }
+    --accent:#6d9bff; --accent-dim:#1d2740; --good:#3fce93; --bad:#ff6b6b; --warn:#ffb454;
+    --series-living:#3987e5; --series-housing:#199e70; --series-edu:#c98500; }
 }
 :root[data-theme="dark"]{ --bg:#12141a; --panel:#1b1f29; --border:#333a48; --text:#eef1f6; --text-dim:#9aa4b4;
-  --accent:#6d9bff; --accent-dim:#1d2740; --good:#3fce93; --bad:#ff6b6b; --warn:#ffb454; }
+  --accent:#6d9bff; --accent-dim:#1d2740; --good:#3fce93; --bad:#ff6b6b; --warn:#ffb454;
+  --series-living:#3987e5; --series-housing:#199e70; --series-edu:#c98500; }
 :root[data-theme="light"]{ --bg:#f7f8fb; --panel:#ffffff; --border:#dde1e8; --text:#1b2230; --text-dim:#5b6472;
-  --accent:#2f6fed; --accent-dim:#e8f0fe; --good:#1a8f5e; --bad:#d64545; --warn:#c8791a; }
+  --accent:#2f6fed; --accent-dim:#e8f0fe; --good:#1a8f5e; --bad:#d64545; --warn:#c8791a;
+  --series-living:#2a78d6; --series-housing:#1baf7a; --series-edu:#eda100; }
 /* ===== 2. リセット / 基本タイポグラフィ ===== */
 *,*::before,*::after{ box-sizing:border-box; }
 body{ margin:0; font-family:var(--font); background:var(--bg); color:var(--text); line-height:1.6; }
@@ -99,7 +103,18 @@ svg.chart{ font-family:inherit; width:100%; height:auto; max-width:760px; displa
 .chart .axis line, .chart .axis path{ stroke:var(--border); }
 .chart .axis text{ fill:var(--text-dim); font-size:10px; }
 .chart .gridline{ stroke:var(--border); stroke-dasharray:2,3; }
-.tooltip{ position:fixed; background:var(--text); color:var(--bg); padding:.3rem .5rem; border-radius:6px; font-size:.78rem; pointer-events:none; display:none; z-index:50; white-space:nowrap; }
+.tooltip{ position:fixed; background:var(--text); color:var(--bg); padding:.3rem .5rem; border-radius:6px; font-size:.78rem; pointer-events:none; display:none; z-index:50; max-width:280px; }
+.legend{ display:flex; gap:1rem; flex-wrap:wrap; font-size:.78rem; color:var(--text-dim); margin:.2rem 0 .4rem; }
+.legend .swatch{ width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:.35rem; }
+.hero-result{ margin:.4rem 0 1.1rem; }
+.hero-result .label{ font-size:.85rem; color:var(--text-dim); }
+.hero-result .big{ font-size:2.2rem; font-weight:800; line-height:1.2; color:var(--accent); }
+.hero-result .sub{ font-size:.85rem; color:var(--text-dim); margin-top:.2rem; }
+.kpi-row{ display:flex; gap:1.6rem; flex-wrap:wrap; }
+.info{ display:inline-flex; align-items:center; justify-content:center; width:1.05rem; height:1.05rem; border-radius:50%; border:1px solid var(--text-dim); color:var(--text-dim); font-size:.68rem; margin-left:.35rem; cursor:help; user-select:none; flex:none; }
+.attribution-table td.delta{ color:var(--bad); font-weight:600; font-variant-numeric:tabular-nums; }
+.scenario-bar{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.4rem 0; }
+td,th{ font-variant-numeric:tabular-nums; }
 .warn-box{ background:var(--accent-dim); border:1px solid var(--accent); border-radius:8px; padding:.6rem .8rem; font-size:.84rem; margin:.5rem 0; }
 .warn-box.danger{ border-color:var(--bad); background:rgba(214,69,69,.08); }
 /* ===== フッター / 出典 ===== */
@@ -125,19 +140,19 @@ footer#data-sources li{ margin-bottom:.25rem; }
     <h2>現在地サマリー</h2>
     <div class="kpi-grid">
       <div class="kpi">
-        <div class="label">生涯資金ギャップ（現在価値）</div>
-        <div class="value" id="kpi-gap">-</div>
-        <div class="sub">既存貯蓄を差し引いた不足額</div>
+        <div class="label">この暮らしに必要な年収</div>
+        <div class="value" id="kpi-income">-</div>
+        <div class="sub" id="kpi-income-sub"></div>
       </div>
       <div class="kpi">
         <div class="label">必要な月次投資額</div>
         <div class="value" id="kpi-pmt">-</div>
-        <div class="sub" id="kpi-pmt-sub">退職までの積立で解消する場合</div>
+        <div class="sub" id="kpi-pmt-sub">現在の年収のまま暮らす場合</div>
       </div>
       <div class="kpi">
-        <div class="label">必要な年収の目安</div>
-        <div class="value" id="kpi-income">-</div>
-        <div class="sub" id="kpi-income-sub"></div>
+        <div class="label">生涯資金ギャップ（現在価値）</div>
+        <div class="value" id="kpi-gap">-</div>
+        <div class="sub">既存貯蓄を差し引いた不足額</div>
       </div>
     </div>
     <div id="nisa-warning"></div>
@@ -255,6 +270,19 @@ function loadPersistedState(){
     if(raw){ Object.assign(state, JSON.parse(raw)); }
   }catch(e){}
 }
+// 古い保存データや共有リンクに新しめの項目が無くても動くよう、欠けているフィールドを補完する
+function ensureStateDefaults(){
+  const std = TEMPLATES.standard;
+  state.profile   = Object.assign({}, std.profile,   {incomeGrowthRate:0}, state.profile);
+  state.housing   = Object.assign({}, std.housing,   state.housing);
+  state.lifestyle = Object.assign({}, std.lifestyle, state.lifestyle);
+  state.retirement= Object.assign({}, std.retirement,state.retirement);
+  state.investment= Object.assign({}, std.investment,{pmtOverride:null}, state.investment);
+  if(!Array.isArray(state.children)) state.children = [];
+  state.children.forEach(c=>{
+    if(!c.stages) c.stages = {...(EDU_TRACK_PRESETS[c.track]||EDU_TRACK_PRESETS.public)};
+  });
+}
 
 /* =====================================================================
    C. 純粋な財務計算関数
@@ -288,18 +316,21 @@ function pmtFromPV(pv, i, n){
 /* =====================================================================
    D. ドメイン別計算
 ===================================================================== */
+function getChildStages(child){
+  if(child.stages) return child.stages;
+  return EDU_TRACK_PRESETS[child.track] || EDU_TRACK_PRESETS.public;
+}
 function getChildEducationCostForAge(child, age, yearsFromNow, inflationRate){
-  const track = EDU_TRACK_PRESETS[child.track] || EDU_TRACK_PRESETS.public;
+  const stages = getChildStages(child);
   let cost = 0;
   for(const key of ['kindergarten','elementary','juniorHigh','highSchool']){
     const stage = EDUCATION_COSTS[key];
     if(age>=stage.startAge && age<stage.startAge+stage.years){
-      const base = track[key]==='private' ? stage.private : stage.public;
-      cost += base;
+      cost += stages[key]==='private' ? stage.private : stage.public;
     }
   }
-  if(age>=UNIVERSITY_COSTS.startAge && age<UNIVERSITY_COSTS.startAge+UNIVERSITY_COSTS.years){
-    const uniKey = track.university;
+  const uniKey = stages.university;
+  if(uniKey && uniKey!=='none' && UNIVERSITY_COSTS[uniKey] && age>=UNIVERSITY_COSTS.startAge && age<UNIVERSITY_COSTS.startAge+UNIVERSITY_COSTS.years){
     const uni = UNIVERSITY_COSTS[uniKey];
     cost += uni.annual;
     if(age===UNIVERSITY_COSTS.startAge) cost += uni.entrance;
@@ -311,7 +342,9 @@ function getHousingCostForYear(t, parentAge, s){
   const h = s.housing;
   if(h.tenure==='rent'){
     const region = REGION_INFO[h.region];
-    const monthlyRent = region.rentPerSqm * h.sizeSqm; // 通勤の余裕度は地域選択と合わせた参考情報としてのみ扱い、家賃計算には直接反映しない
+    // 職住距離の許容度を家賃係数に反映: 近距離重視+15% 〜 郊外でも可-15%
+    const commuteFactor = 1.15 - 0.3*s.lifestyle.commute;
+    const monthlyRent = region.rentPerSqm * h.sizeSqm * commuteFactor;
     return inflate(monthlyRent*12, t, s.investment.inflationRate);
   } else {
     const principal = Math.max(h.purchasePrice - h.downPayment, 0);
@@ -353,7 +386,7 @@ function buildTimeline(s){
   for(let t=0;t<=n;t++){
     const age = s.profile.currentAge + t;
     const isRetired = age >= s.retirement.retireAge;
-    const incomeNominal = isRetired ? getPensionForYear(t,s) : inflate(s.profile.currentIncome, t, 0);
+    const incomeNominal = isRetired ? getPensionForYear(t,s) : s.profile.currentIncome * Math.pow(1+(s.profile.incomeGrowthRate||0), t);
     const livingNominal = isRetired ? getRetirementCostForYear(t,s) : getLivingCostForYear(t,s);
     const housingNominal = isRetired ? 0 : getHousingCostForYear(t, age, s);
     let eduNominal = 0;
@@ -414,6 +447,60 @@ function simulateNetWorth(timeline, pmt, s){
   }
   return series;
 }
+function depletionAge(netWorthSeries){
+  const first = netWorthSeries.find(p=>p.balance<0);
+  return first ? first.age : null;
+}
+function computeMetrics(s){
+  const timeline = buildTimeline(s);
+  const totals = computeLifetimeTotals(timeline);
+  const gapPV = computeFundingGapPV(timeline, s);
+  const pmt = computeRequiredMonthlyInvestment(gapPV, s);
+  return { timeline, totals, gapPV, pmt };
+}
+function findPeakIncomeYear(timeline, s){
+  let peak = timeline[0];
+  for(const row of timeline){
+    if(row.age < s.retirement.retireAge && row.requiredIncomeGross > peak.requiredIncomeGross) peak = row;
+  }
+  return peak;
+}
+// 「どの選択が必要額を押し上げているか」: 選択項目をベースライン(より質素な選択)に置き換えて再計算し、差分を出す
+function computeAttributions(s, baseMetrics){
+  const items = [];
+  function diff(label, mutate){
+    const clone = JSON.parse(JSON.stringify(s));
+    mutate(clone);
+    const m = computeMetrics(clone);
+    const dPmt = baseMetrics.pmt - m.pmt;
+    const dGap = baseMetrics.gapPV - m.gapPV;
+    if(dPmt > 500) items.push({ label, dPmt, dGap });
+  }
+  if(s.housing.tenure==='rent' && s.housing.region!=='otherRegion'){
+    diff(`${REGION_INFO[s.housing.region].label}に住む（その他地方と比べて）`, c=>{ c.housing.region='otherRegion'; });
+  }
+  if(s.housing.tenure==='own'){
+    diff('持ち家の購入（同地域の賃貸と比べて）', c=>{ c.housing.tenure='rent'; });
+  }
+  s.children.forEach((child, i)=>{
+    const stages = getChildStages(child);
+    const isBaseline = ['kindergarten','elementary','juniorHigh','highSchool'].every(k=>stages[k]==='public') && stages.university==='national';
+    if(!isBaseline){
+      diff(`第${i+1}子の進学プラン（すべて公立・国公立大と比べて）`, c=>{ c.children[i].track='public'; c.children[i].stages = {...EDU_TRACK_PRESETS.public}; });
+    }
+  });
+  if(s.lifestyle.luxury > 0.55){
+    diff('生活の贅沢度（「標準」と比べて）', c=>{ c.lifestyle.luxury = 0.5; });
+  }
+  if(s.lifestyle.diningOutPerWeek > 0){
+    diff(`外食・中食 週${s.lifestyle.diningOutPerWeek}回（外食なしと比べて）`, c=>{ c.lifestyle.diningOutPerWeek = 0; });
+  }
+  if(s.retirement.level > 0.05){
+    diff('老後のゆとり（最低日常生活費と比べて）', c=>{ c.retirement.level = 0; });
+  }
+  items.sort((a,b)=>b.dPmt-a.dPmt);
+  return items;
+}
 
 /* =====================================================================
    G. 描画
@@ -468,21 +555,82 @@ function renderLineChart(container, series, opts){
     svg.appendChild(svgEl('line',{x1:xx,x2:xx,y1:pad.t,y2:h-pad.b, stroke:'var(--text-dim)','stroke-dasharray':'2,3'}));
   });
   // hover
-  const hitRect = svgEl('rect',{x:pad.l,y:pad.t,width:(w-pad.l-pad.r),height:(h-pad.t-pad.b), fill:'transparent'});
+  attachChartHover(svg, {w, pad, xs, series, labelFn: (closest)=> closest.age+'歳: ' + opts.lines.map(l=>l.label+' '+fmtYen(closest[l.key])).join(' / ')});
+  container.appendChild(svg);
+  if(opts.legend){
+    container.appendChild(buildLegend(opts.lines.map(l=>({label:l.label, color:l.color}))));
+  }
+}
+
+// タッチ・マウス両対応のホバー層(pointerイベント)
+function attachChartHover(svg, cfg){
+  const {w, pad, xs, series, labelFn} = cfg;
   const tooltip = document.getElementById('tooltip');
-  hitRect.addEventListener('mousemove', (e)=>{
+  const handler = (e)=>{
     const rect = svg.getBoundingClientRect();
     const mx = (e.clientX-rect.left) * (w/rect.width); // 表示スケールをviewBox座標に補正
     const age = Math.round(scaleLinear([pad.l,w-pad.r],[Math.min(...xs),Math.max(...xs)])(mx));
     const closest = series.reduce((a,b)=> Math.abs(b.age-age)<Math.abs(a.age-age)?b:a);
     tooltip.style.display='block';
-    tooltip.style.left = e.clientX+12+'px';
+    tooltip.style.left = Math.min(e.clientX+12, window.innerWidth-290)+'px';
     tooltip.style.top = e.clientY+12+'px';
-    tooltip.textContent = closest.age+'歳: ' + opts.lines.map(l=>l.label+' '+fmtYen(closest[l.key])).join(' / ');
+    tooltip.textContent = labelFn(closest);
+  };
+  svg.addEventListener('pointermove', handler);
+  svg.addEventListener('pointerdown', handler);
+  svg.addEventListener('pointerleave', ()=>{ tooltip.style.display='none'; });
+}
+
+function buildLegend(items){
+  const div = document.createElement('div'); div.className='legend';
+  items.forEach(it=>{
+    const span = document.createElement('span');
+    const sw = document.createElement('span'); sw.className='swatch'; sw.style.background = it.color;
+    span.appendChild(sw); span.appendChild(document.createTextNode(it.label));
+    div.appendChild(span);
   });
-  hitRect.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; });
-  svg.appendChild(hitRect);
+  return div;
+}
+
+// 支出内訳の積み上げエリアチャート(生活費/住居費/教育費)
+function renderStackedAreaChart(container, timeline, opts){
+  const w=(opts&&opts.width)||640, h=(opts&&opts.height)||220, pad={l:60,r:20,t:16,b:28};
+  container.innerHTML='';
+  const bands = [
+    { key:'livingNominal',  label:'生活費(老後含む)', color:'var(--series-living)' },
+    { key:'housingNominal', label:'住居費',           color:'var(--series-housing)' },
+    { key:'eduNominal',     label:'教育費',           color:'var(--series-edu)' },
+  ];
+  const svg = svgEl('svg',{class:'chart', width:w, height:h, viewBox:`0 0 ${w} ${h}`});
+  const xs = timeline.map(p=>p.age);
+  // 累積値を計算
+  const cums = timeline.map(row=>{
+    let acc=0; return bands.map(b=>{ acc += row[b.key]; return acc; });
+  });
+  const yMax = Math.max(...cums.map(c=>c[c.length-1]), 1);
+  const x = scaleLinear([Math.min(...xs), Math.max(...xs)], [pad.l, w-pad.r]);
+  const y = scaleLinear([0, yMax], [h-pad.b, pad.t]);
+  const g = svgEl('g',{class:'axis'});
+  for(let i=0;i<=4;i++){
+    const val = yMax*i/4, yy = y(val);
+    g.appendChild(svgEl('line',{class:'gridline', x1:pad.l, x2:w-pad.r, y1:yy, y2:yy}));
+    const t = svgEl('text',{x:pad.l-6, y:yy+3, 'text-anchor':'end'}); t.textContent = fmtYen(val); g.appendChild(t);
+  }
+  for(let i=0;i<xs.length;i+=Math.max(1,Math.round(xs.length/8))){
+    const t = svgEl('text',{x:x(xs[i]), y:h-6, 'text-anchor':'middle'}); t.textContent = xs[i]+'歳'; g.appendChild(t);
+  }
+  svg.appendChild(g);
+  bands.forEach((band, bi)=>{
+    let d='';
+    timeline.forEach((row,i)=>{ d += (i===0?'M':'L') + x(row.age) + ' ' + y(cums[i][bi]) + ' '; });
+    for(let i=timeline.length-1;i>=0;i--){ d += 'L' + x(timeline[i].age) + ' ' + y(bi===0?0:cums[i][bi-1]) + ' '; }
+    d += 'Z';
+    // 帯同士の境界にサーフェス色のストロークを入れて塗りを区切る
+    svg.appendChild(svgEl('path',{d, fill:band.color, 'fill-opacity':0.85, stroke:'var(--panel)', 'stroke-width':1.5}));
+  });
+  attachChartHover(svg, {w, pad, xs, series: timeline, labelFn:(row)=> row.age+'歳: ' + bands.map(b=>b.label+' '+fmtYen(row[b.key])).join(' / ')});
   container.appendChild(svg);
+  container.appendChild(buildLegend(bands));
 }
 
 function renderBarChart(container, series, opts){
@@ -516,17 +664,14 @@ function recompute(){
     ['kpi-gap','kpi-pmt','kpi-income'].forEach(id=>document.getElementById(id).textContent='-');
     return;
   }
-  const timeline = buildTimeline(state);
-  const totals = computeLifetimeTotals(timeline);
-  const gapPV = computeFundingGapPV(timeline, state);
-  const pmt = computeRequiredMonthlyInvestment(gapPV, state);
-  const netWorth = simulateNetWorth(timeline, pmt, state);
-
-  document.getElementById('kpi-gap').textContent = fmtYen(gapPV);
-  document.getElementById('kpi-pmt').textContent = fmtYen(pmt)+'/月';
+  const metrics = computeMetrics(state);
+  const { timeline, totals, gapPV, pmt } = metrics;
   const currentRow = timeline[0];
+
   document.getElementById('kpi-income').textContent = fmtYen(currentRow.requiredIncomeGross);
   document.getElementById('kpi-income-sub').textContent = '現在の年収 '+fmtYen(state.profile.currentIncome)+' との差 '+fmtYen(currentRow.requiredIncomeGross-state.profile.currentIncome);
+  document.getElementById('kpi-pmt').textContent = fmtYen(pmt)+'/月';
+  document.getElementById('kpi-gap').textContent = fmtYen(gapPV);
 
   const annualPmt = pmt*12;
   const warnEl = document.getElementById('nisa-warning');
@@ -539,27 +684,41 @@ function recompute(){
   }
 
   if(document.getElementById('step-results').classList.contains('active')){
-    renderResults(timeline, totals, gapPV, pmt, netWorth);
+    renderResults(metrics);
   }
   persistState();
 }
 
-function renderResults(timeline, totals, gapPV, pmt, netWorth){
-  document.getElementById('result-total-nominal').textContent = fmtYen(totals.totalNominal);
+function renderResults(metrics){
+  const { timeline, totals, gapPV, pmt } = metrics;
+  const currentRow = timeline[0];
+
+  // ヒーロー: 必要年収が主役
+  document.getElementById('hero-income-now').textContent = fmtYen(currentRow.requiredIncomeGross);
+  const peak = findPeakIncomeYear(timeline, state);
+  const gapNote = state.profile.currentIncome>0
+    ? `現在の年収(${fmtYen(state.profile.currentIncome)})のまま暮らす場合は、月${fmtYen(pmt)}の積立で不足を埋められます。`
+    : '';
+  document.getElementById('hero-income-sub').textContent =
+    `ピークは${peak.age}歳ごろの${fmtYen(peak.requiredIncomeGross)}/年。${gapNote}`;
+
   document.getElementById('result-gap-pv').textContent = fmtYen(gapPV);
   document.getElementById('result-pmt').textContent = fmtYen(pmt)+' / 月';
+  document.getElementById('result-total-nominal').textContent = fmtYen(totals.totalNominal);
 
-  const incomeChartContainer = document.getElementById('income-chart');
-  renderLineChart(incomeChartContainer, timeline, {
+  renderLineChart(document.getElementById('income-chart'), timeline, {
     lines:[ {key:'requiredIncomeGross', label:'必要年収(概算)', color:'var(--bad)'}, {key:'incomeNominal', label:'想定収入', color:'var(--accent)'} ],
     markers: deriveStageBoundaries(state),
+    legend: true,
   });
 
-  const cashflowContainer = document.getElementById('cashflow-chart');
-  renderBarChart(cashflowContainer, timeline, { key:'netCashflow' });
+  renderStackedAreaChart(document.getElementById('breakdown-chart'), timeline);
 
-  const netWorthContainer = document.getElementById('networth-chart');
-  renderLineChart(netWorthContainer, netWorth, { lines:[ {key:'balance', label:'純資産残高', color:'var(--good)'} ] });
+  renderAttributions(metrics);
+
+  renderBarChart(document.getElementById('cashflow-chart'), timeline, { key:'netCashflow' });
+
+  renderNetWorthSection(metrics);
 
   const stages = deriveStageBoundaries(state);
   const tbody = document.getElementById('stage-table-body');
@@ -567,9 +726,154 @@ function renderResults(timeline, totals, gapPV, pmt, netWorth){
   stages.forEach(st=>{
     const row = timeline.find(r=>r.age===st.age) || timeline[timeline.length-1];
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${st.label}(${st.age}歳)</td><td>${fmtYen(row.requiredIncomeGross)}</td><td>${fmtYen(row.incomeNominal)}</td><td>${fmtYen(row.requiredIncomeGross-row.incomeNominal)}</td>`;
+    tr.innerHTML = `<td>${st.label}(${st.age}歳)</td><td>${fmtYen(row.requiredIncomeGross)}</td><td>${fmtYen(row.incomeNominal)}</td><td>${fmtYen(row.requiredIncomeGross-row.incomeNominal)}</td>`
+      + `<td>${fmtYen(row.livingNominal)}</td><td>${fmtYen(row.housingNominal)}</td><td>${fmtYen(row.eduNominal)}</td>`;
     tbody.appendChild(tr);
   });
+
+  renderScenarioSection(metrics);
+}
+
+function renderAttributions(metrics){
+  const container = document.getElementById('attribution-section');
+  const items = computeAttributions(state, metrics);
+  if(items.length===0){ container.innerHTML='<p class="hint">押し上げ要因はありません(すべて最も質素な選択になっています)。</p>'; return; }
+  let html = '<div class="chart-wrap"><table class="attribution-table"><thead><tr><th>選択</th><th>月次積立への影響</th><th>生涯ギャップへの影響</th></tr></thead><tbody>';
+  items.forEach(it=>{
+    html += `<tr><td>${it.label}</td><td class="delta">+${fmtYen(it.dPmt)}/月</td><td class="delta">+${fmtYen(it.dGap)}</td></tr>`;
+  });
+  html += '</tbody></table></div><p class="hint">※各行は「その選択だけをより質素な基準に戻した場合」との差分です(個別比較のため、合計は全体と一致しません)。</p>';
+  container.innerHTML = html;
+}
+
+function renderNetWorthSection(metrics){
+  const { timeline, pmt } = metrics;
+  const effectivePmt = state.investment.pmtOverride!=null ? state.investment.pmtOverride : pmt;
+  const netWorth = simulateNetWorth(timeline, effectivePmt, state);
+  renderLineChart(document.getElementById('networth-chart'), netWorth, { lines:[ {key:'balance', label:'純資産残高', color:'var(--good)'} ] });
+
+  const msgEl = document.getElementById('pmt-override-message');
+  if(state.investment.pmtOverride!=null){
+    const dep = depletionAge(netWorth);
+    if(dep!=null){
+      msgEl.innerHTML = `<div class="warn-box danger">月${fmtYen(effectivePmt)}の積立では、<strong>${dep}歳で資産が尽きる</strong>見込みです(必要額は月${fmtYen(pmt)})。</div>`;
+    }else{
+      const last = netWorth[netWorth.length-1];
+      msgEl.innerHTML = `<div class="warn-box">月${fmtYen(effectivePmt)}の積立なら、100歳時点で約${fmtYen(last.balance)}の余裕があります。</div>`;
+    }
+  }else{
+    msgEl.innerHTML = '<p class="hint">算出した必要額どおりに積み立てた場合、資産は計画期間の最後でちょうど使い切る設計です。</p>';
+  }
+
+  const ctl = document.getElementById('pmt-override-control');
+  // ドラッグ操作中(フォーカスがコントロール内にある間)は作り直さない — 再構築するとドラッグが途切れる
+  if(ctl.contains(document.activeElement) && document.activeElement!==document.body) return;
+  ctl.innerHTML='';
+  const maxPmt = Math.max(Math.ceil(pmt*2/10000)*10000, 300000);
+  ctl.appendChild(sliderField('実際に積み立てる額(試す)', effectivePmt, 0, maxPmt, 5000,
+    v=>fmtYen(v)+'/月',
+    v=>{ state.investment.pmtOverride = v; }, {left:'0円', right:fmtYen(maxPmt)}));
+  const resetBtn = document.createElement('button');
+  resetBtn.className='btn secondary'; resetBtn.type='button'; resetBtn.textContent='必要額に戻す';
+  resetBtn.addEventListener('click', ()=>{ state.investment.pmtOverride = null; recompute(); });
+  ctl.appendChild(resetBtn);
+}
+
+/* ===== シナリオ保存・比較 / URL共有 ===== */
+function getScenarios(){ try{ return JSON.parse(localStorage.getItem('lifeplan_scenarios')||'[]'); }catch(e){ return []; } }
+function saveScenarios(list){ try{ localStorage.setItem('lifeplan_scenarios', JSON.stringify(list)); }catch(e){} }
+
+function snapshotState(){
+  return JSON.parse(JSON.stringify({
+    profile: state.profile, housing: state.housing, lifestyle: state.lifestyle,
+    children: state.children, retirement: state.retirement, investment: state.investment,
+  }));
+}
+
+function renderScenarioSection(metrics, force){
+  const container = document.getElementById('scenario-section');
+  // 名前入力中の再計算で入力欄を消さない(保存・削除ボタンからの明示的な再描画は force で通す)
+  if(!force && container.contains(document.activeElement) && document.activeElement!==document.body) return;
+  container.innerHTML='';
+
+  const bar = document.createElement('div'); bar.className='scenario-bar';
+  const nameInput = document.createElement('input'); nameInput.type='text'; nameInput.placeholder='シナリオ名(例: 東京私立プラン)'; nameInput.style.flex='1 1 200px';
+  const saveBtn = document.createElement('button'); saveBtn.className='btn'; saveBtn.type='button'; saveBtn.textContent='現在の入力を保存';
+  saveBtn.addEventListener('click', ()=>{
+    const list = getScenarios();
+    list.push({ name: nameInput.value.trim() || `シナリオ${list.length+1}`, savedAt: Date.now(), state: snapshotState() });
+    saveScenarios(list);
+    nameInput.value='';
+    renderScenarioSection(metrics, true);
+  });
+  const shareBtn = document.createElement('button'); shareBtn.className='btn secondary'; shareBtn.type='button'; shareBtn.textContent='共有用リンクをコピー';
+  shareBtn.addEventListener('click', ()=>{
+    const url = location.href.split('#')[0] + encodeStateToHash();
+    const done = ()=>{ shareBtn.textContent='コピーしました ✓'; setTimeout(()=>{ shareBtn.textContent='共有用リンクをコピー'; }, 2000); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(done).catch(()=>{ window.prompt('このリンクをコピーしてください', url); });
+    }else{
+      window.prompt('このリンクをコピーしてください', url);
+    }
+  });
+  bar.appendChild(nameInput); bar.appendChild(saveBtn); bar.appendChild(shareBtn);
+  container.appendChild(bar);
+
+  const list = getScenarios();
+  if(list.length===0){
+    container.insertAdjacentHTML('beforeend', '<p class="hint">シナリオを保存すると、「東京私立プラン vs 地方公立プラン」のような比較ができます。</p>');
+    return;
+  }
+  const wrap = document.createElement('div'); wrap.className='chart-wrap';
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>シナリオ</th><th>必要年収(現在)</th><th>必要月次積立</th><th>生涯ギャップ</th><th></th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  // 先頭行は現在の入力
+  const curTr = document.createElement('tr');
+  curTr.innerHTML = `<td><strong>現在の入力</strong></td><td>${fmtYen(metrics.timeline[0].requiredIncomeGross)}</td><td>${fmtYen(metrics.pmt)}/月</td><td>${fmtYen(metrics.gapPV)}</td><td></td>`;
+  tbody.appendChild(curTr);
+  list.forEach((sc, idx)=>{
+    let m = null;
+    try{ m = computeMetrics(sc.state); }catch(e){}
+    const tr = document.createElement('tr');
+    const cells = m
+      ? `<td>${fmtYen(m.timeline[0].requiredIncomeGross)}</td><td>${fmtYen(m.pmt)}/月</td><td>${fmtYen(m.gapPV)}</td>`
+      : '<td colspan="3">計算できませんでした</td>';
+    tr.innerHTML = `<td>${escapeHtml(sc.name)}</td>${cells}<td></td>`;
+    const actions = tr.lastElementChild;
+    const loadBtn = document.createElement('button'); loadBtn.className='btn secondary'; loadBtn.type='button'; loadBtn.textContent='読み込む'; loadBtn.style.marginRight='.3rem';
+    loadBtn.addEventListener('click', ()=>{
+      Object.assign(state, JSON.parse(JSON.stringify(sc.state)));
+      ensureStateDefaults();
+      rebuildAllSteps();
+      setActiveStep('results');
+    });
+    const delBtn = document.createElement('button'); delBtn.className='btn secondary'; delBtn.type='button'; delBtn.textContent='削除';
+    delBtn.addEventListener('click', ()=>{
+      const l = getScenarios(); l.splice(idx,1); saveScenarios(l); renderScenarioSection(metrics, true);
+    });
+    actions.appendChild(loadBtn); actions.appendChild(delBtn);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  container.appendChild(wrap);
+}
+
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function encodeStateToHash(){
+  const json = JSON.stringify(snapshotState());
+  return '#s=' + btoa(unescape(encodeURIComponent(json)));
+}
+function decodeStateFromHash(){
+  if(!location.hash.startsWith('#s=')) return false;
+  try{
+    const json = decodeURIComponent(escape(atob(location.hash.slice(3))));
+    const payload = JSON.parse(json);
+    Object.assign(state, payload);
+    return true;
+  }catch(e){ return false; }
 }
 
 /* =====================================================================
@@ -610,6 +914,22 @@ function stepNavButtons(prevId, nextId){
   return html;
 }
 
+function applyTemplate(key, userAge){
+  const tpl = JSON.parse(JSON.stringify(TEMPLATES[key]));
+  // 入力された年齢に合わせて結婚・出産などのライフイベントを平行移動する(退職年齢は据え置き)
+  const shift = (userAge||tpl.profile.currentAge) - tpl.profile.currentAge;
+  tpl.profile.currentAge += shift;
+  if(tpl.profile.marriageAge) tpl.profile.marriageAge += shift;
+  tpl.children.forEach(c=>{
+    c.birthParentAge += shift;
+    c.stages = {...EDU_TRACK_PRESETS[c.track]};
+  });
+  Object.assign(state, tpl);
+  ensureStateDefaults();
+  state.appliedTemplate = key;
+  state.investment.pmtOverride = null;
+}
+
 function buildStartStep(){
   const el = document.createElement('section');
   el.className='step'; el.id='step-start';
@@ -619,31 +939,56 @@ function buildStartStep(){
     cards += `<button type="button" class="template-card" data-template="${key}"><h3>${tpl.label}</h3><p>${tpl.desc}</p></button>`;
   }
   cards += '</div>';
-  el.innerHTML = `<h2>まずはテンプレートから選ぶ</h2><p class="hint">選択後も全ての項目を自由に編集できます。こだわりたい方は各ステップの「詳細設定」で細部まで調整可能です。</p>${cards}${stepNavButtons(null,'profile')}`;
+  el.innerHTML = `<h2>あなたの年齢を入れて、近いテンプレートを選ぶ</h2>
+    <div class="field" style="max-width:160px"><label>あなたの年齢</label><input type="number" id="start-age" value="${state.profile.currentAge}" min="18" max="60"></div>
+    <p class="hint">テンプレートを選ぶとすぐに結果が表示されます。結婚・出産などのタイミングは年齢に合わせて自動調整され、あとから全項目を自由に編集できます。</p>
+    ${cards}${stepNavButtons(null,'profile')}`;
   el.querySelectorAll('.template-card').forEach(card=>{
     card.addEventListener('click', ()=>{
-      const key = card.dataset.template;
-      const tpl = JSON.parse(JSON.stringify(TEMPLATES[key]));
-      Object.assign(state, tpl);
-      state.appliedTemplate = key;
+      const age = parseInt(el.querySelector('#start-age').value, 10) || 28;
+      applyTemplate(card.dataset.template, age);
       rebuildAllSteps();
-      setActiveStep('profile');
+      setActiveStep('results');
     });
   });
   return el;
 }
 
+function infoIcon(text){
+  const s = document.createElement('span'); s.className='info'; s.textContent='?'; s.tabIndex=0;
+  const tt = ()=>document.getElementById('tooltip');
+  const show = ()=>{
+    const r = s.getBoundingClientRect();
+    const el = tt();
+    el.textContent = text;
+    el.style.display='block';
+    el.style.left = Math.max(8, Math.min(r.left, window.innerWidth-290))+'px';
+    el.style.top = (r.bottom+6)+'px';
+  };
+  const hide = ()=>{ tt().style.display='none'; };
+  s.addEventListener('pointerenter', show);
+  s.addEventListener('pointerleave', hide);
+  s.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); tt().style.display==='block' ? hide() : show(); });
+  return s;
+}
+
 function numField(label, value, onChange, opts={}){
+  // opts.unit=10000 で万円単位入力(内部状態は円のまま)。opts.info で用語解説アイコンを付ける。
   const wrap = document.createElement('div'); wrap.className='field';
-  const lab = document.createElement('label'); lab.textContent = label; wrap.appendChild(lab);
-  const input = document.createElement('input'); input.type='number'; input.value=value;
+  const lab = document.createElement('label'); lab.textContent = label;
+  if(opts.info) lab.appendChild(infoIcon(opts.info));
+  wrap.appendChild(lab);
+  const unit = opts.unit || 1;
+  const input = document.createElement('input'); input.type='number';
+  input.value = unit===1 ? value : +(value/unit).toFixed(2);
   if(opts.step) input.step = opts.step;
-  input.addEventListener('input', ()=>{ onChange(parseFloat(input.value)||0); recompute(); });
+  input.addEventListener('input', ()=>{ onChange((parseFloat(input.value)||0)*unit); recompute(); });
   wrap.appendChild(input);
   return wrap;
 }
 
-function sliderField(label, value, min, max, step, valueLabelFn, onChange){
+function sliderField(label, value, min, max, step, valueLabelFn, onChange, ends){
+  ends = ends || { left:'少なめ', right:'多め' };
   const wrap = document.createElement('div'); wrap.className='slider-field';
   const lab = document.createElement('label'); lab.innerHTML = `${label}: <span class="slider-value">${valueLabelFn(value)}</span>`;
   wrap.appendChild(lab);
@@ -654,8 +999,18 @@ function sliderField(label, value, min, max, step, valueLabelFn, onChange){
     onChange(v); recompute();
   });
   wrap.appendChild(input);
-  wrap.appendChild(Object.assign(document.createElement('div'), {className:'slider-labels', innerHTML:'<span>質素</span><span>贅沢</span>'}));
+  wrap.appendChild(Object.assign(document.createElement('div'), {className:'slider-labels', innerHTML:`<span>${ends.left}</span><span>${ends.right}</span>`}));
   return wrap;
+}
+
+function advancedSection(labelText){
+  const btn = document.createElement('button'); btn.type='button'; btn.className='toggle-advanced'; btn.textContent='▸ '+(labelText||'詳細設定');
+  const panel = document.createElement('div'); panel.className='advanced-panel';
+  btn.addEventListener('click', ()=>{
+    panel.classList.toggle('open');
+    btn.textContent = (panel.classList.contains('open')?'▾ ':'▸ ')+(labelText||'詳細設定');
+  });
+  return { btn, panel };
 }
 
 function buildProfileStep(){
@@ -663,10 +1018,16 @@ function buildProfileStep(){
   el.innerHTML = '<h2>基本情報</h2>';
   const row = document.createElement('div'); row.className='field-row';
   row.appendChild(numField('現在の年齢', state.profile.currentAge, v=>state.profile.currentAge=v));
-  row.appendChild(numField('現在の年収（円、任意・比較用）', state.profile.currentIncome, v=>state.profile.currentIncome=v));
-  row.appendChild(numField('現在の貯蓄額（円）', state.profile.currentSavings, v=>state.profile.currentSavings=v));
+  row.appendChild(numField('現在の年収（万円、比較用）', state.profile.currentIncome, v=>state.profile.currentIncome=v, {unit:10000}));
+  row.appendChild(numField('現在の貯蓄額（万円）', state.profile.currentSavings, v=>state.profile.currentSavings=v, {unit:10000}));
   row.appendChild(numField('結婚予定年齢（任意）', state.profile.marriageAge, v=>state.profile.marriageAge=v));
   el.appendChild(row);
+  const adv = advancedSection('詳細設定（昇給の織り込み）');
+  const advRow = document.createElement('div'); advRow.className='field-row';
+  advRow.appendChild(numField('想定昇給率（%/年）', (state.profile.incomeGrowthRate||0)*100, v=>state.profile.incomeGrowthRate=v/100, {step:0.1,
+    info:'退職まで毎年この率で年収が伸びる前提になります。参考: 国税庁統計では平均給与は20代前半267万円→55-59歳545万円(年率換算約2%)。0なら現在の年収が退職まで続く保守的な前提です。'}));
+  adv.panel.appendChild(advRow);
+  el.appendChild(adv.btn); el.appendChild(adv.panel);
   el.insertAdjacentHTML('beforeend', stepNavButtons('start','housing'));
   return el;
 }
@@ -700,13 +1061,13 @@ function buildHousingStep(){
   const lifestyleH = document.createElement('h3'); lifestyleH.textContent='生活の贅沢度'; el.appendChild(lifestyleH);
   el.appendChild(sliderField('日々の生活の贅沢度', state.lifestyle.luxury, 0, 1, 0.05,
     v=> v<0.34?'質素':(v<0.67?'標準':'贅沢'),
-    v=>state.lifestyle.luxury=v));
+    v=>state.lifestyle.luxury=v, {left:'質素', right:'贅沢'}));
   el.appendChild(sliderField('外食・中食の頻度（週あたり回数）', state.lifestyle.diningOutPerWeek, 0, 7, 1,
-    v=>v+'回/週', v=>state.lifestyle.diningOutPerWeek=v));
-  el.appendChild(sliderField('職住距離・通勤の余裕度', state.lifestyle.commute, 0, 1, 0.05,
-    v=>v<0.34?'近距離重視':(v<0.67?'標準':'郊外でも可'),
-    v=>state.lifestyle.commute=v));
-  el.insertAdjacentHTML('beforeend', '<p class="hint">※通勤の余裕度は住居費との直接の計算には反映していません。地域選択と合わせて住まい選びの参考にしてください。</p>');
+    v=>v+'回/週', v=>state.lifestyle.diningOutPerWeek=v, {left:'0回', right:'毎日'}));
+  el.appendChild(sliderField('職住距離のこだわり', state.lifestyle.commute, 0, 1, 0.05,
+    v=>{ const pct = Math.round((1.15-0.3*v-1)*100); return (v<0.34?'駅近・都心寄り':(v<0.67?'標準':'郊外でも可'))+`（家賃${pct>=0?'+':''}${pct}%）`; },
+    v=>state.lifestyle.commute=v, {left:'駅近・都心寄り', right:'郊外でも可'}));
+  el.insertAdjacentHTML('beforeend', '<p class="hint">※職住距離のこだわりは賃貸の家賃に±15%の係数として反映されます。持ち家の場合は購入価格に自分で織り込んでください。</p>');
 
   el.insertAdjacentHTML('beforeend', stepNavButtons('profile','family'));
   rebuildHousingDetail(detailDiv);
@@ -718,8 +1079,9 @@ function rebuildHousingDetail(container){
   const row = document.createElement('div'); row.className='field-row';
   row.appendChild(numField('広さ（㎡）', state.housing.sizeSqm, v=>state.housing.sizeSqm=v));
   if(state.housing.tenure==='own'){
-    row.appendChild(numField('購入価格（円・目安値、ユーザー入力）', state.housing.purchasePrice, v=>state.housing.purchasePrice=v));
-    row.appendChild(numField('頭金（円）', state.housing.downPayment, v=>state.housing.downPayment=v));
+    row.appendChild(numField('購入価格（万円・目安値）', state.housing.purchasePrice, v=>state.housing.purchasePrice=v, {unit:10000,
+      info:'地域・広さ別の公的な相場データは収録していないため、想定する物件価格を直接入力してください。'}));
+    row.appendChild(numField('頭金（万円）', state.housing.downPayment, v=>state.housing.downPayment=v, {unit:10000}));
     row.appendChild(numField('ローン年数', state.housing.loanYears, v=>state.housing.loanYears=v));
     row.appendChild(numField('金利（%）', state.housing.loanRate, v=>state.housing.loanRate=v, {step:0.1}));
   }
@@ -738,10 +1100,19 @@ function buildFamilyStep(){
   renderChildrenList(listDiv);
   return el;
 }
+const STAGE_SELECT_DEFS = [
+  { key:'kindergarten', label:'幼稚園', options:[['public','公立'],['private','私立']] },
+  { key:'elementary',   label:'小学校', options:[['public','公立'],['private','私立']] },
+  { key:'juniorHigh',   label:'中学校', options:[['public','公立'],['private','私立']] },
+  { key:'highSchool',   label:'高校',   options:[['public','公立'],['private','私立']] },
+  { key:'university',   label:'大学',   options:[['national','国公立'],['privateLiberal','私立文系'],['privateScience','私立理系'],['none','進学しない']] },
+];
+
 function renderChildrenList(container){
   container = container || document.getElementById('children-list');
   container.innerHTML='';
   state.children.forEach((child, idx)=>{
+    if(!child.stages) child.stages = {...(EDU_TRACK_PRESETS[child.track]||EDU_TRACK_PRESETS.public)};
     const row = document.createElement('div'); row.className='child-row';
     row.innerHTML = `<button class="remove" type="button">✕ 削除</button><h3>第${idx+1}子</h3>`;
     const fr = document.createElement('div'); fr.className='field-row';
@@ -749,13 +1120,45 @@ function renderChildrenList(container){
     const trackField = document.createElement('div'); trackField.className='field';
     trackField.innerHTML='<label>進学コース</label>';
     const sel = document.createElement('select');
-    [['public','すべて公立・国公立大'],['mixed','公立中心・私立大学'],['private','すべて私立']].forEach(([v,l])=>{
+    [['public','すべて公立・国公立大'],['mixed','公立中心・私立大学'],['private','すべて私立'],['custom','カスタム(詳細設定で調整)']].forEach(([v,l])=>{
       const opt=document.createElement('option'); opt.value=v; opt.textContent=l; if(child.track===v) opt.selected=true; sel.appendChild(opt);
     });
-    sel.addEventListener('change', ()=>{ child.track=sel.value; recompute(); });
+    sel.addEventListener('change', ()=>{
+      child.track = sel.value;
+      if(sel.value!=='custom'){
+        child.stages = {...EDU_TRACK_PRESETS[sel.value]};
+        stageSelects.forEach(({key, select})=>{ select.value = child.stages[key]; });
+      }
+      recompute();
+    });
     trackField.appendChild(sel);
     fr.appendChild(trackField);
     row.appendChild(fr);
+
+    // 詳細設定: 段階ごとに公立/私立(大学は国公立/私立文理/進学しない)を選ぶ
+    const adv = advancedSection('詳細設定（段階ごとに選ぶ）');
+    const advRow = document.createElement('div'); advRow.className='field-row';
+    const stageSelects = [];
+    STAGE_SELECT_DEFS.forEach(def=>{
+      const f = document.createElement('div'); f.className='field';
+      f.innerHTML = `<label>${def.label}</label>`;
+      const s = document.createElement('select');
+      def.options.forEach(([v,l])=>{
+        const opt=document.createElement('option'); opt.value=v; opt.textContent=l; if(child.stages[def.key]===v) opt.selected=true; s.appendChild(opt);
+      });
+      s.addEventListener('change', ()=>{
+        child.stages[def.key] = s.value;
+        child.track = 'custom';
+        sel.value = 'custom';
+        recompute();
+      });
+      f.appendChild(s);
+      advRow.appendChild(f);
+      stageSelects.push({key:def.key, select:s});
+    });
+    adv.panel.appendChild(advRow);
+    row.appendChild(adv.btn); row.appendChild(adv.panel);
+
     row.querySelector('.remove').addEventListener('click', ()=>{ state.children.splice(idx,1); renderChildrenList(); recompute(); });
     container.appendChild(row);
   });
@@ -769,7 +1172,7 @@ function buildRetirementStep(){
   el.appendChild(row);
   el.appendChild(sliderField('老後のゆとり度合い（最低日常生活費〜ゆとりある老後生活費）', state.retirement.level, 0, 1, 0.05,
     v=>fmtYen(RETIREMENT_MIN_MONTHLY+(RETIREMENT_COMFORT_MONTHLY-RETIREMENT_MIN_MONTHLY)*v)+'/月',
-    v=>state.retirement.level=v));
+    v=>state.retirement.level=v, {left:'最低限(23.9万円/月)', right:'ゆとり(39.1万円/月)'}));
   const pensionField = document.createElement('div'); pensionField.className='field';
   pensionField.innerHTML = '<label>年金受給見込み</label>';
   const sel = document.createElement('select');
@@ -810,9 +1213,12 @@ function rebuildInvestmentDetail(container){
   container = container || document.getElementById('investment-detail');
   container.innerHTML='';
   const row = document.createElement('div'); row.className='field-row';
-  row.appendChild(numField('想定運用利回り（%、カスタム調整可）', (state.investment.returnRate*100).toFixed(2), v=>state.investment.returnRate=v/100, {step:0.1}));
-  row.appendChild(numField('想定インフレ率（%）', (state.investment.inflationRate*100).toFixed(2), v=>state.investment.inflationRate=v/100, {step:0.1}));
-  row.appendChild(numField('手取り率（%、必要年収の逆算に使用）', (state.investment.netIncomeRatio*100).toFixed(1), v=>state.investment.netIncomeRatio=v/100, {step:0.5}));
+  row.appendChild(numField('想定運用利回り（%、カスタム調整可）', +(state.investment.returnRate*100).toFixed(2), v=>state.investment.returnRate=v/100, {step:0.1,
+    info:'積立投資の年率リターンの想定。参考: GPIF(公的年金の運用)の2001〜2024年度実績は年率4.18%。'}));
+  row.appendChild(numField('想定インフレ率（%）', +(state.investment.inflationRate*100).toFixed(2), v=>state.investment.inflationRate=v/100, {step:0.1,
+    info:'物価が毎年何%上がるかの想定。日本銀行は2%を「物価安定の目標」としています。教育費や生活費はこの率で将来に向けて増額されます。'}));
+  row.appendChild(numField('手取り率（%）', +(state.investment.netIncomeRatio*100).toFixed(1), v=>state.investment.netIncomeRatio=v/100, {step:0.5,
+    info:'額面年収に対する手取りの割合。税金・社会保険料を引いた後に自由に使えるお金の比率で、「必要年収」への換算に使います。年収500万円前後ならおおむね75〜80%です。'}));
   container.appendChild(row);
 }
 
@@ -820,23 +1226,42 @@ function buildResultsStep(){
   const el = document.createElement('section'); el.className='step'; el.id='step-results';
   el.innerHTML = `
     <h2>結果</h2>
-    <div class="field-row">
-      <div class="kpi"><div class="label">生涯の資金不足合計（将来価値の単純合計）</div><div class="value" id="result-total-nominal">-</div></div>
-      <div class="kpi"><div class="label">生涯資金ギャップ（現在価値）</div><div class="value" id="result-gap-pv">-</div></div>
+    <p class="hint">各タブでいつでも入力を調整できます。値を変えると結果は即座に更新されます。</p>
+    <div class="hero-result">
+      <div class="label">この暮らしに必要な年収（現在）<span id="hero-income-info"></span></div>
+      <div class="big" id="hero-income-now">-</div>
+      <div class="sub" id="hero-income-sub"></div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">生涯資金ギャップ（現在価値）<span id="gap-info"></span></div><div class="value" id="result-gap-pv">-</div></div>
       <div class="kpi"><div class="label">必要な月次投資額</div><div class="value" id="result-pmt">-</div></div>
+      <div class="kpi"><div class="label">生涯の資金不足合計（将来価値）<span id="nominal-info"></span></div><div class="value" id="result-total-nominal">-</div></div>
     </div>
     <h3>年収推移（必要年収 vs 想定収入）</h3>
     <div class="chart-wrap" id="income-chart"></div>
+    <h3>支出の内訳（何にいくらかかるか）</h3>
+    <div class="chart-wrap" id="breakdown-chart"></div>
+    <h3>何が必要額を押し上げているか</h3>
+    <div id="attribution-section"></div>
     <h3>年次キャッシュフロー（黒字/赤字）</h3>
     <div class="chart-wrap" id="cashflow-chart"></div>
-    <h3>純資産推移シミュレーション（算出した月次投資額で積立した場合）</h3>
+    <h3>純資産推移シミュレーション</h3>
+    <div id="pmt-override-control"></div>
+    <div id="pmt-override-message"></div>
     <div class="chart-wrap" id="networth-chart"></div>
     <h3>ライフステージ別 必要年収テーブル</h3>
+    <div class="chart-wrap">
     <table>
-      <thead><tr><th>ステージ</th><th>必要年収(概算)</th><th>想定収入</th><th>差分</th></tr></thead>
+      <thead><tr><th>ステージ</th><th>必要年収(概算)</th><th>想定収入</th><th>差分</th><th>生活費</th><th>住居費</th><th>教育費</th></tr></thead>
       <tbody id="stage-table-body"></tbody>
     </table>
+    </div>
+    <h3>シナリオの保存・比較・共有</h3>
+    <div id="scenario-section"></div>
   `;
+  el.querySelector('#hero-income-info').appendChild(infoIcon('その年の支出(生活費+住居費+教育費)を手取りで賄うために必要な額面年収です。年収がこの水準に届いていれば、その年は貯蓄を取り崩さずに暮らせます。'));
+  el.querySelector('#gap-info').appendChild(infoIcon('生涯の収支不足を、想定運用利回りで現在の価値に換算した金額から、いまの貯蓄を差し引いたもの。「いまこの金額があって運用に回せれば、将来の不足をすべて賄える」という意味です。'));
+  el.querySelector('#nominal-info').appendChild(infoIcon('将来の各年の不足額をそのまま足した名目の合計。年ごとのお金の価値の違いを無視した参考値で、大きく見えますが現在価値ギャップの方が実態に近い指標です。'));
   el.insertAdjacentHTML('beforeend', stepNavButtons('investment', null));
   return el;
 }
@@ -869,10 +1294,12 @@ function buildSources(){
 ===================================================================== */
 function init(){
   loadPersistedState();
+  const fromShareLink = decodeStateFromHash(); // 共有リンク経由ならその内容を優先
+  ensureStateDefaults();
   buildNav();
   rebuildAllSteps();
   buildSources();
-  setActiveStep(state.activeStep || 'start');
+  setActiveStep(fromShareLink ? 'results' : (state.activeStep || 'start'));
   recompute();
 }
 init();
