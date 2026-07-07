@@ -115,6 +115,27 @@ svg.chart{ font-family:inherit; width:100%; height:auto; max-width:760px; displa
 .attribution-table td.delta{ color:var(--bad); font-weight:600; font-variant-numeric:tabular-nums; }
 .scenario-bar{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.4rem 0; }
 td,th{ font-variant-numeric:tabular-nums; }
+/* 達成度ゲージ */
+.gauge{ height:10px; background:var(--border); border-radius:999px; overflow:hidden; margin:.5rem 0 .25rem; max-width:420px; }
+.gauge .fill{ height:100%; border-radius:999px; background:var(--good); transition:width .3s; }
+.gauge .fill.warn{ background:var(--warn); }
+.gauge .fill.low{ background:var(--accent); }
+.gauge-msg{ font-size:.88rem; margin-bottom:.4rem; }
+/* 毎月の家計カード */
+.budget-card{ border:1px solid var(--border); border-radius:var(--radius); padding:.8rem 1rem; margin:.5rem 0 1rem; background:var(--bg); max-width:560px; }
+.budget-row{ display:grid; grid-template-columns:1fr auto; gap:.1rem .6rem; align-items:center; margin:.4rem 0; font-size:.9rem; }
+.budget-row .amount{ text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+.budget-row .bar{ grid-column:1/-1; height:8px; border-radius:999px; }
+.budget-row .bar i{ display:block; height:100%; border-radius:999px; }
+.budget-total{ border-top:1px dashed var(--border); margin-top:.6rem; padding-top:.6rem; font-weight:700; font-size:.95rem; }
+.budget-total.good{ color:var(--good); } .budget-total.bad{ color:var(--bad); }
+/* 次のアクション */
+.action-cards{ display:grid; gap:.6rem; margin:.5rem 0 1rem; }
+.action-card{ display:flex; gap:.7rem; border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; padding:.7rem .9rem; background:var(--bg); align-items:flex-start; }
+.action-card .num{ font-weight:800; color:var(--accent); font-size:1.15rem; line-height:1.4; }
+.action-card .body{ flex:1; }
+.action-card .body p{ margin:.15rem 0; font-size:.88rem; }
+.action-card .body .btn{ margin-top:.35rem; }
 .warn-box{ background:var(--accent-dim); border:1px solid var(--accent); border-radius:8px; padding:.6rem .8rem; font-size:.84rem; margin:.5rem 0; }
 .warn-box.danger{ border-color:var(--bad); background:rgba(214,69,69,.08); }
 /* ===== フッター / 出典 ===== */
@@ -128,7 +149,7 @@ footer#data-sources li{ margin-bottom:.25rem; }
 
 <header class="app-header">
   <h1>ライフプランニング逆算電卓</h1>
-  <p>「いくら稼げるか」ではなく「どう生きたいか」から出発する。理想の暮らしを入力すると、必要な年収・貯蓄・投資額を逆算します。</p>
+  <p>「いくら稼げるか」ではなく「どう生きたいか」から。理想の暮らしを描くと、必要な年収と毎月のマネープランを逆算します。</p>
 </header>
 
 <nav class="wizard-steps" id="wizard-nav"></nav>
@@ -403,11 +424,13 @@ function buildTimeline(s){
 
 function deriveStageBoundaries(s){
   const stages = [];
-  stages.push({ age: s.profile.currentAge, label:'現在' });
-  if(s.profile.marriageAge>s.profile.currentAge) stages.push({ age:s.profile.marriageAge, label:'結婚' });
-  s.children.forEach((c,i)=> stages.push({ age:c.birthParentAge, label:`第${i+1}子誕生` }));
-  s.children.forEach((c,i)=> stages.push({ age:c.birthParentAge+18, label:`第${i+1}子 大学入学` }));
-  stages.push({ age:s.retirement.retireAge, label:'退職' });
+  stages.push({ age: s.profile.currentAge, label:'📍現在' });
+  if(s.profile.marriageAge>s.profile.currentAge) stages.push({ age:s.profile.marriageAge, label:'💍結婚' });
+  s.children.forEach((c,i)=> stages.push({ age:c.birthParentAge, label:`👶第${i+1}子誕生` }));
+  s.children.forEach((c,i)=>{
+    if(getChildStages(c).university!=='none') stages.push({ age:c.birthParentAge+18, label:`🎓第${i+1}子 大学入学` });
+  });
+  stages.push({ age:s.retirement.retireAge, label:'🌅退職' });
   return stages.filter(x=>x.age>=s.profile.currentAge).sort((a,b)=>a.age-b.age);
 }
 
@@ -468,35 +491,35 @@ function findPeakIncomeYear(timeline, s){
 // 「どの選択が必要額を押し上げているか」: 選択項目をベースライン(より質素な選択)に置き換えて再計算し、差分を出す
 function computeAttributions(s, baseMetrics){
   const items = [];
-  function diff(label, mutate){
+  function diff(label, tab, mutate){
     const clone = JSON.parse(JSON.stringify(s));
     mutate(clone);
     const m = computeMetrics(clone);
     const dPmt = baseMetrics.pmt - m.pmt;
     const dGap = baseMetrics.gapPV - m.gapPV;
-    if(dPmt > 500) items.push({ label, dPmt, dGap });
+    if(dPmt > 500) items.push({ label, tab, dPmt, dGap });
   }
   if(s.housing.tenure==='rent' && s.housing.region!=='otherRegion'){
-    diff(`${REGION_INFO[s.housing.region].label}に住む（その他地方と比べて）`, c=>{ c.housing.region='otherRegion'; });
+    diff(`${REGION_INFO[s.housing.region].label}に住む（その他地方と比べて）`, 'housing', c=>{ c.housing.region='otherRegion'; });
   }
   if(s.housing.tenure==='own'){
-    diff('持ち家の購入（同地域の賃貸と比べて）', c=>{ c.housing.tenure='rent'; });
+    diff('持ち家の購入（同地域の賃貸と比べて）', 'housing', c=>{ c.housing.tenure='rent'; });
   }
   s.children.forEach((child, i)=>{
     const stages = getChildStages(child);
     const isBaseline = ['kindergarten','elementary','juniorHigh','highSchool'].every(k=>stages[k]==='public') && stages.university==='national';
     if(!isBaseline){
-      diff(`第${i+1}子の進学プラン（すべて公立・国公立大と比べて）`, c=>{ c.children[i].track='public'; c.children[i].stages = {...EDU_TRACK_PRESETS.public}; });
+      diff(`第${i+1}子の進学プラン（すべて公立・国公立大と比べて）`, 'family', c=>{ c.children[i].track='public'; c.children[i].stages = {...EDU_TRACK_PRESETS.public}; });
     }
   });
   if(s.lifestyle.luxury > 0.55){
-    diff('生活の贅沢度（「標準」と比べて）', c=>{ c.lifestyle.luxury = 0.5; });
+    diff('生活の贅沢度（「標準」と比べて）', 'housing', c=>{ c.lifestyle.luxury = 0.5; });
   }
   if(s.lifestyle.diningOutPerWeek > 0){
-    diff(`外食・中食 週${s.lifestyle.diningOutPerWeek}回（外食なしと比べて）`, c=>{ c.lifestyle.diningOutPerWeek = 0; });
+    diff(`外食・中食 週${s.lifestyle.diningOutPerWeek}回（外食なしと比べて）`, 'housing', c=>{ c.lifestyle.diningOutPerWeek = 0; });
   }
   if(s.retirement.level > 0.05){
-    diff('老後のゆとり（最低日常生活費と比べて）', c=>{ c.retirement.level = 0; });
+    diff('老後のゆとり（最低日常生活費と比べて）', 'retirement', c=>{ c.retirement.level = 0; });
   }
   items.sort((a,b)=>b.dPmt-a.dPmt);
   return items;
@@ -692,15 +715,30 @@ function recompute(){
 function renderResults(metrics){
   const { timeline, totals, gapPV, pmt } = metrics;
   const currentRow = timeline[0];
+  const attrs = computeAttributions(state, metrics);
 
   // ヒーロー: 必要年収が主役
   document.getElementById('hero-income-now').textContent = fmtYen(currentRow.requiredIncomeGross);
   const peak = findPeakIncomeYear(timeline, state);
-  const gapNote = state.profile.currentIncome>0
-    ? `現在の年収(${fmtYen(state.profile.currentIncome)})のまま暮らす場合は、月${fmtYen(pmt)}の積立で不足を埋められます。`
-    : '';
   document.getElementById('hero-income-sub').textContent =
-    `ピークは${peak.age}歳ごろの${fmtYen(peak.requiredIncomeGross)}/年。${gapNote}`;
+    `ピークは${peak.age}歳ごろの${fmtYen(peak.requiredIncomeGross)}/年です。`;
+
+  // 達成度ゲージ: 現在の年収が必要年収をどれだけカバーしているか
+  const coverage = currentRow.requiredIncomeGross>0 ? state.profile.currentIncome/currentRow.requiredIncomeGross : 1;
+  const fill = document.getElementById('hero-gauge-fill');
+  fill.style.width = Math.min(coverage*100, 100)+'%';
+  fill.className = 'fill ' + (coverage>=1 ? '' : coverage>=0.8 ? 'warn' : 'low');
+  const msgEl = document.getElementById('hero-gauge-msg');
+  if(coverage>=1){
+    msgEl.textContent = `🎉 いまの年収(${fmtYen(state.profile.currentIncome)})で、現在の理想の暮らしに手が届いています！`;
+  }else if(coverage>=0.8){
+    msgEl.textContent = `あと一歩！ いまの年収(${fmtYen(state.profile.currentIncome)})で必要額の${Math.round(coverage*100)}%をカバーできています。`;
+  }else{
+    msgEl.textContent = `いまの年収(${fmtYen(state.profile.currentIncome)})で必要額の${Math.round(coverage*100)}%。伸びしろ十分、下の「次のアクション」から始めましょう。`;
+  }
+
+  renderMonthlyBudget(metrics);
+  renderNextActions(metrics, attrs);
 
   document.getElementById('result-gap-pv').textContent = fmtYen(gapPV);
   document.getElementById('result-pmt').textContent = fmtYen(pmt)+' / 月';
@@ -714,7 +752,7 @@ function renderResults(metrics){
 
   renderStackedAreaChart(document.getElementById('breakdown-chart'), timeline);
 
-  renderAttributions(metrics);
+  renderAttributions(attrs);
 
   renderBarChart(document.getElementById('cashflow-chart'), timeline, { key:'netCashflow' });
 
@@ -734,9 +772,98 @@ function renderResults(metrics){
   renderScenarioSection(metrics);
 }
 
-function renderAttributions(metrics){
+// 毎月の家計イメージ(現在時点): 抽象的な年額・生涯額を、毎月のお財布の姿に翻訳する
+function fmtMan1(v){
+  if(Math.abs(v)>=10000) return (v/10000).toFixed(1).replace(/\.0$/,'')+'万円';
+  return Math.round(v).toLocaleString()+'円';
+}
+function renderMonthlyBudget(metrics){
+  const { timeline, pmt } = metrics;
+  const row = timeline[0];
+  const netMonthly = state.profile.currentIncome * state.investment.netIncomeRatio / 12;
+  const items = [
+    { emoji:'💵', label:'手取り月収（いまの年収から）', v:netMonthly, color:'var(--good)' },
+    { emoji:'🍚', label:'生活費', v:row.livingNominal/12, color:'var(--series-living)' },
+    { emoji:'🏠', label:'住居費', v:row.housingNominal/12, color:'var(--series-housing)' },
+    { emoji:'🎓', label:'教育費', v:row.eduNominal/12, color:'var(--series-edu)' },
+    { emoji:'💰', label:'未来への積立（必要額）', v:pmt, color:'var(--accent)' },
+  ].filter(it=>it.v>0 || it.emoji==='💵');
+  const maxV = Math.max(...items.map(i=>i.v), 1);
+  const outgo = row.livingNominal/12 + row.housingNominal/12 + row.eduNominal/12 + pmt;
+  const balance = netMonthly - outgo;
+  const card = document.getElementById('monthly-budget');
+  let html = '';
+  items.forEach(it=>{
+    html += `<div class="budget-row"><span>${it.emoji} ${it.label}</span><span class="amount">${fmtMan1(it.v)}</span>`
+      + `<span class="bar"><i style="width:${Math.max(it.v/maxV*100,2)}%;background:${it.color}"></i></span></div>`;
+  });
+  if(balance>=0){
+    html += `<div class="budget-total good">今月の残り: +${fmtMan1(balance)} 🎉 余裕があります</div>`;
+  }else{
+    html += `<div class="budget-total bad">今月の足りない分: ${fmtMan1(balance)}</div>`
+      + `<p class="hint">年収を上げる・積立を減らして期間を延ばす・理想を少し調整する、のどれかで埋められます(下の「次のアクション」へ)。</p>`;
+  }
+  card.innerHTML = html;
+}
+
+// 結果から逆算した、具体的な次の一手
+function renderNextActions(metrics, attrs){
+  const { timeline, pmt } = metrics;
+  const row = timeline[0];
+  const container = document.getElementById('next-actions');
+  const actions = [];
+
+  if(pmt > 0){
+    const annual = pmt*12;
+    let nisaNote;
+    if(annual <= NISA_LIMITS.tsumitateAnnual) nisaNote = 'NISAのつみたて投資枠(年120万円)だけで足ります。';
+    else if(annual <= NISA_LIMITS.combinedAnnual) nisaNote = 'NISAのつみたて枠+成長投資枠の併用でカバーできます。';
+    else nisaNote = 'NISA枠(年360万円)を超える分は課税口座での運用になります。';
+    actions.push({
+      title: `毎月${fmtMan1(pmt)}の自動積立を設定する`,
+      desc: `証券口座で毎月自動で積み立てる設定にするのが最初の一歩。${nisaNote}`,
+      btnLabel: '積立額をスライダーで試す', btnAction: ()=>{ document.getElementById('pmt-override-control').scrollIntoView({behavior:'smooth', block:'center'}); },
+    });
+  }
+
+  const incomeGap = row.requiredIncomeGross - state.profile.currentIncome;
+  if(incomeGap > 0){
+    actions.push({
+      title: `年収を${fmtYen(incomeGap)}上げる道を探す`,
+      desc: `昇進・転職・副業などで理想の暮らしにまっすぐ近づけます。「基本情報 > 詳細設定」で昇給率を入れると、将来の昇給込みのプランも試せます。`,
+      btnLabel: '基本情報で年収を変えてみる', btnAction: ()=>setActiveStep('profile'),
+    });
+  }
+
+  if(attrs.length > 0){
+    const top = attrs[0];
+    const tabLabels = { housing:'住居・生活', family:'家族・教育', retirement:'老後' };
+    actions.push({
+      title: 'ゆずれる所がないか、少しだけ試してみる',
+      desc: `いちばん効くのは「${top.label}」で、見直すと毎月${fmtMan1(top.dPmt)}軽くなります。決める必要はありません、スライダーで動かして眺めるだけでOK。`,
+      btnLabel: `「${tabLabels[top.tab]||'入力'}」タブで試す`, btnAction: ()=>setActiveStep(top.tab),
+    });
+  }
+
+  actions.push({
+    title: 'このプランに名前を付けて保存する',
+    desc: '「東京私立プラン」「地方でのんびりプラン」のように保存しておくと、あとで並べて比較できます。迷ったら両方保存!',
+    btnLabel: 'シナリオ保存へ', btnAction: ()=>{ document.getElementById('scenario-section').scrollIntoView({behavior:'smooth', block:'center'}); },
+  });
+
+  container.innerHTML='';
+  actions.forEach((a, i)=>{
+    const card = document.createElement('div'); card.className='action-card';
+    card.innerHTML = `<span class="num">${i+1}</span><div class="body"><p><strong>${a.title}</strong></p><p class="hint">${a.desc}</p></div>`;
+    const btn = document.createElement('button'); btn.className='btn secondary'; btn.type='button'; btn.textContent=a.btnLabel;
+    btn.addEventListener('click', a.btnAction);
+    card.querySelector('.body').appendChild(btn);
+    container.appendChild(card);
+  });
+}
+
+function renderAttributions(items){
   const container = document.getElementById('attribution-section');
-  const items = computeAttributions(state, metrics);
   if(items.length===0){ container.innerHTML='<p class="hint">押し上げ要因はありません(すべて最も質素な選択になっています)。</p>'; return; }
   let html = '<div class="chart-wrap"><table class="attribution-table"><thead><tr><th>選択</th><th>月次積立への影響</th><th>生涯ギャップへの影響</th></tr></thead><tbody>';
   items.forEach(it=>{
@@ -933,10 +1060,11 @@ function applyTemplate(key, userAge){
 function buildStartStep(){
   const el = document.createElement('section');
   el.className='step'; el.id='step-start';
+  const tplEmoji = { steady:'🌾', standard:'🏡', urban:'🏙️' };
   let cards = '<div class="template-cards">';
   for(const key in TEMPLATES){
     const tpl = TEMPLATES[key];
-    cards += `<button type="button" class="template-card" data-template="${key}"><h3>${tpl.label}</h3><p>${tpl.desc}</p></button>`;
+    cards += `<button type="button" class="template-card" data-template="${key}"><h3>${tplEmoji[key]||''} ${tpl.label}</h3><p>${tpl.desc}</p></button>`;
   }
   cards += '</div>';
   el.innerHTML = `<h2>あなたの年齢を入れて、近いテンプレートを選ぶ</h2>
@@ -1230,13 +1358,20 @@ function buildResultsStep(){
     <div class="hero-result">
       <div class="label">この暮らしに必要な年収（現在）<span id="hero-income-info"></span></div>
       <div class="big" id="hero-income-now">-</div>
+      <div class="gauge"><div class="fill" id="hero-gauge-fill" style="width:0%"></div></div>
+      <div class="gauge-msg" id="hero-gauge-msg"></div>
       <div class="sub" id="hero-income-sub"></div>
     </div>
+    <h3>毎月の家計イメージ（現在）</h3>
+    <div class="budget-card" id="monthly-budget"></div>
+    <h3>次のアクション</h3>
+    <div class="action-cards" id="next-actions"></div>
+    <h3>数字でくわしく</h3>
     <div class="kpi-row">
-      <div class="kpi"><div class="label">生涯資金ギャップ（現在価値）<span id="gap-info"></span></div><div class="value" id="result-gap-pv">-</div></div>
-      <div class="kpi"><div class="label">必要な月次投資額</div><div class="value" id="result-pmt">-</div></div>
-      <div class="kpi"><div class="label">生涯の資金不足合計（将来価値）<span id="nominal-info"></span></div><div class="value" id="result-total-nominal">-</div></div>
+      <div class="kpi"><div class="label">一生分の不足をいま埋めるなら<span id="gap-info"></span></div><div class="value" id="result-gap-pv">-</div></div>
+      <div class="kpi"><div class="label">毎月コツコツ積み立てるなら</div><div class="value" id="result-pmt">-</div></div>
     </div>
+    <p class="hint">生涯の資金不足の単純合計（将来価値）: <span id="result-total-nominal">-</span><span id="nominal-info"></span></p>
     <h3>年収推移（必要年収 vs 想定収入）</h3>
     <div class="chart-wrap" id="income-chart"></div>
     <h3>支出の内訳（何にいくらかかるか）</h3>
