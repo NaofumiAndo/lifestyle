@@ -443,13 +443,13 @@ function computeLifetimeTotals(timeline){
   return { totalNominal };
 }
 function computeFundingGapPV(timeline, s){
-  // 黒字年の余剰も相殺した生涯純キャッシュフローの現在価値。
-  // 赤字年だけを合算するとPMTが過大になり、積立ロールフォワードの残高が0に収束しない(整合性が崩れる)ため、
-  // 全期間のnetCashflowを符号込みで合算する。指数はt+1(simulateNetWorthが各年の複利計算後にnetCashflowを
-  // 反映する時点=年末タイミング)に合わせる。
+  // 「積立は固定、黒字年の余剰は自由に使ってよい」前提のモデル。
+  // 赤字年の不足分だけを現在価値に割引いて合算する(余剰を計画に組み込まない保守的な設計)。
+  // こうすることで「昇給で増えた分はまるごと自由に使える」という表示が計算上も正しくなる。
+  // 指数はt+1(simulateNetWorthが各年の複利計算後にキャッシュフローを反映する年末タイミング)に合わせる。
   const r = s.investment.returnRate;
   let pv=0;
-  for(const row of timeline) pv += (-row.netCashflow) / Math.pow(1+r, row.t+1);
+  for(const row of timeline) pv += Math.max(-row.netCashflow, 0) / Math.pow(1+r, row.t+1);
   return Math.max(pv - s.profile.currentSavings, 0);
 }
 function computeRequiredMonthlyInvestment(gapPV, s){
@@ -460,12 +460,14 @@ function computeRequiredMonthlyInvestment(gapPV, s){
   return annualPmt/12;
 }
 function simulateNetWorth(timeline, pmt, s, rateOverride){
+  // 「積立は固定、黒字年の余剰は自由に使う」前提: 資産からは赤字年の不足分だけを取り崩し、
+  // 黒字年の余剰は資産に足さない(computeFundingGapPVと同じ前提で整合)。
   const r = rateOverride!=null ? rateOverride : s.investment.returnRate;
   let balance = s.profile.currentSavings;
   const series=[];
   for(const row of timeline){
     const contributing = row.age < s.retirement.retireAge;
-    balance = balance*(1+r) + (contributing? pmt*12:0) + row.netCashflow;
+    balance = balance*(1+r) + (contributing? pmt*12:0) + Math.min(row.netCashflow, 0);
     series.push({ age:row.age, balance });
   }
   return series;
@@ -485,19 +487,20 @@ function crossoverAge(netWorthSeries, timeline, pmt, s){
   }
   return null;
 }
-// 積立の「卒業」年齢: その年以降の積立をゼロにしても、100歳まで資産が持つ最初の年
-function coastAge(timeline, pmt, s){
+// 資産の運用益(配当+値上がり)が生活費(教育費除く)の一定割合を初めて賄える年齢
+function earningPowerAges(netWorthSeries, timeline, s, thresholds){
   const r = s.investment.returnRate;
-  for(let stop=0; stop<timeline.length; stop++){
-    let bal = s.profile.currentSavings;
-    for(let i=0;i<timeline.length;i++){
-      const row = timeline[i];
-      const contributing = row.age < s.retirement.retireAge && i < stop;
-      bal = bal*(1+r) + (contributing? pmt*12:0) + row.netCashflow;
+  const result = {};
+  let prev = s.profile.currentSavings;
+  for(let i=0;i<timeline.length;i++){
+    const gain = prev * r;
+    const base = timeline[i].livingNominal + timeline[i].housingNominal;
+    for(const th of thresholds){
+      if(result[th]===undefined && base>0 && gain >= base*th) result[th] = timeline[i].age;
     }
-    if(bal >= -1000) return timeline[stop] ? timeline[stop].age : null; // 丸め誤差を許容
+    prev = netWorthSeries[i].balance;
   }
-  return null;
+  return result;
 }
 function computeMetrics(s){
   const timeline = buildTimeline(s);
@@ -919,22 +922,58 @@ function renderNetWorthSection(metrics){
     const gain = prevBal * state.investment.returnRate;
     ms.push(`🚀 <strong>${cross}歳</strong>: 資産の運用益(年${fmtMan1(gain)})が、あなたの年間積立(${fmtMan1(effectivePmt*12)})を追い越します。ここからはお金が主に働く側です。`);
   }
-  const coast = coastAge(timeline, effectivePmt, state);
-  if(coast!=null && coast < state.retirement.retireAge) ms.push(`🎓 <strong>${coast}歳</strong>: 積立を"卒業"できます。以降は1円も積み立てなくても、資産の成長だけで100歳まで届く計算です。`);
-  else if(coast!=null) ms.push(`🎓 <strong>${coast}歳(退職)</strong>で積立は完了。多めに積むほど"卒業"は早まります(上のスライダーで試せます)。`);
+  // 🪙 資産の稼ぐ力: 運用益が生活費(教育費除く)の25%/50%/100%を賄える年齢
+  const power = earningPowerAges(netWorth, timeline, state, [0.25, 0.5, 1.0]);
+  const powerParts = [];
+  if(power[0.25]!==undefined) powerParts.push(`25%→<strong>${power[0.25]}歳</strong>`);
+  if(power[0.5]!==undefined)  powerParts.push(`50%→<strong>${power[0.5]}歳</strong>`);
+  if(power[1]!==undefined)    powerParts.push(`100%→<strong>${power[1]}歳</strong>`);
+  if(powerParts.length){
+    let powerMsg = `🪙 資産の稼ぐ力(運用益=配当+値上がり)が生活費の ${powerParts.join('、')} を賄える大きさに育ちます。`;
+    if(power[1]!==undefined) powerMsg += `100%を超えたら「働くかどうかを選べる」状態です。`;
+    powerMsg += `(計画上は再投資して備えに回します)`;
+    ms.push(powerMsg);
+  }
   const bankDep = depletionAge(bankWorth);
   const investDep = depletionAge(netWorth);
   if(!investDep && bankDep) ms.push(`🏦 同じ月${fmtMan1(effectivePmt)}でも、貯金だけだと<strong>${bankDep}歳で尽きます</strong>。運用が肩代わりしてくれる分の差です。`);
+  // 💸 積立は固定のまま、昇給分はまるごと自由に使えるお金として増えていく
   const g = state.profile.incomeGrowthRate||0;
-  if(g>0 && effectivePmt>0 && state.profile.currentIncome>0){
-    const yearsToRetire = state.retirement.retireAge - state.profile.currentAge;
-    const ratioNow = effectivePmt/(state.profile.currentIncome*state.investment.netIncomeRatio/12);
-    const ratioLater = effectivePmt/(state.profile.currentIncome*Math.pow(1+g, yearsToRetire-1)*state.investment.netIncomeRatio/12);
-    ms.push(`💸 毎月${fmtMan1(effectivePmt)}の重さは、いまは手取りの<strong>${Math.round(ratioNow*100)}%</strong> → 昇給率${(g*100).toFixed(1)}%なら退職直前には<strong>${Math.round(ratioLater*100)}%</strong>まで軽くなり、自由に使えるお金が年々増えていきます。`);
-  }else if(effectivePmt>0){
-    ms.push(`💸 「基本情報 > 詳細設定」で昇給率を入れると、同じ積立額が年々軽くなっていく様子も見られます。`);
+  const retireIdx = state.retirement.retireAge - state.profile.currentAge;
+  const freeAt = (t)=>{
+    const row = timeline[t];
+    return row.incomeNominal*state.investment.netIncomeRatio/12 - row.expense/12 - effectivePmt;
+  };
+  const budgetBalanced = retireIdx>1 && freeAt(0) >= 0; // いまの収入で支出+積立が賄えているか
+  if(effectivePmt>0 && state.profile.currentIncome>0 && retireIdx>1){
+    if(budgetBalanced && g>0){
+      const points = [`いま月<strong>${fmtMan1(freeAt(0))}</strong>`];
+      if(retireIdx>11) points.push(`10年後 月<strong>${fmtMan1(freeAt(10))}</strong>`);
+      points.push(`退職直前 月<strong>${fmtMan1(freeAt(retireIdx-1))}</strong>`);
+      ms.push(`💸 将来分は月${fmtMan1(effectivePmt)}の積立で足りているので、昇給分はまるごと自由に。自由に使えるお金は ${points.join(' → ')} と増えていきます(昇給率${(g*100).toFixed(1)}%想定。子どもの大学期は一時的に凹みます)。`);
+    }else if(budgetBalanced){
+      ms.push(`💸 「基本情報 > 詳細設定」で昇給率を入れると、積立は固定のまま自由に使えるお金が年々増えていく様子が見られます。`);
+    }else{
+      // 現在の年収では支出+積立が賄えない場合: 必要年収に届いた後の物語として伝える
+      const req = timeline[0].requiredIncomeGross;
+      ms.push(`💸 この理想は必要年収${fmtYen(req)}の暮らしです。年収がそこに届いたあとは、積立は月${fmtMan1(effectivePmt)}のままでいいので、<strong>そこから先の昇給分はまるごと自由に使えるお金</strong>になっていきます。`);
+    }
   }
   msEl.innerHTML = ms.length ? `<div class="warn-box" style="border-color:var(--good); background:rgba(26,143,94,.06);">${ms.map(m=>`<p style="margin:.25rem 0">${m}</p>`).join('')}</div>` : '';
+
+  // 月々の自由に使えるお金チャート(現役期間のみ、収支が合っているプランでのみ意味を持つ)
+  const freeChartEl = document.getElementById('freemoney-chart');
+  const freeHeading = document.getElementById('freemoney-heading');
+  const freeHint = document.getElementById('freemoney-hint');
+  const freeSeries = timeline.filter(r=>r.age < state.retirement.retireAge)
+    .map(r=>({ age:r.age, free: r.incomeNominal*state.investment.netIncomeRatio/12 - r.expense/12 - effectivePmt }));
+  const showFreeChart = freeSeries.length>1 && freeSeries.some(p=>p.free>0);
+  freeChartEl.style.display = showFreeChart ? '' : 'none';
+  freeHeading.style.display = showFreeChart ? '' : 'none';
+  freeHint.style.display = showFreeChart ? '' : 'none';
+  if(showFreeChart){
+    renderLineChart(freeChartEl, freeSeries, { lines:[ {key:'free', label:'自由に使えるお金/月', color:'var(--accent)'} ], height:170 });
+  }
 
   const msgEl = document.getElementById('pmt-override-message');
   if(state.investment.pmtOverride!=null){
@@ -1443,6 +1482,9 @@ function buildResultsStep(){
     <div id="pmt-override-message"></div>
     <div id="networth-milestones"></div>
     <div class="chart-wrap" id="networth-chart"></div>
+    <h3 id="freemoney-heading">月々の自由に使えるお金（積立は固定のまま）</h3>
+    <p class="hint" id="freemoney-hint">手取りから支出と積立を引いた残り。昇給分がそのまま自由になっていきます。</p>
+    <div class="chart-wrap" id="freemoney-chart"></div>
     <h3>ライフステージ別 必要年収テーブル</h3>
     <div class="chart-wrap">
     <table>
