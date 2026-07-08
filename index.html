@@ -242,7 +242,7 @@ const NISA_LIMITS = { tsumitateAnnual:1_200_000, growthAnnual:2_400_000, combine
 const TEMPLATES = {
   steady: {
     label:'堅実プラン', desc:'地方・賃貸・公立中心・最低限の老後',
-    profile:{ currentAge:28, currentIncome:4000000, currentSavings:1000000, marriageAge:30 },
+    profile:{ currentAge:28, currentIncome:4000000, currentSavings:1000000, marriageAge:30, incomeGrowthRate:0.02 },
     housing:{ tenure:'rent', region:'otherRegion', sizeSqm:55, purchasePrice:0, downPayment:0, loanYears:35, loanRate:1.0 },
     lifestyle:{ luxury:0.3, diningOutPerWeek:1, commute:0.3 },
     children:[ { birthParentAge:32, track:'public' }, { birthParentAge:35, track:'public' } ],
@@ -251,7 +251,7 @@ const TEMPLATES = {
   },
   standard: {
     label:'標準プラン', desc:'地方中核市・持ち家・公私混在・ややゆとりある老後',
-    profile:{ currentAge:28, currentIncome:5000000, currentSavings:2000000, marriageAge:29 },
+    profile:{ currentAge:28, currentIncome:5000000, currentSavings:2000000, marriageAge:29, incomeGrowthRate:0.02 },
     housing:{ tenure:'own', region:'coreCity', sizeSqm:75, purchasePrice:35000000, downPayment:5000000, loanYears:35, loanRate:1.0 },
     lifestyle:{ luxury:0.5, diningOutPerWeek:2, commute:0.5 },
     children:[ { birthParentAge:31, track:'public' }, { birthParentAge:33, track:'mixed' } ],
@@ -260,7 +260,7 @@ const TEMPLATES = {
   },
   urban: {
     label:'都心共働きプラン', desc:'東京23区・私立中心・ゆとりある老後',
-    profile:{ currentAge:29, currentIncome:7000000, currentSavings:4000000, marriageAge:30 },
+    profile:{ currentAge:29, currentIncome:7000000, currentSavings:4000000, marriageAge:30, incomeGrowthRate:0.02 },
     housing:{ tenure:'own', region:'tokyo23', sizeSqm:70, purchasePrice:70000000, downPayment:10000000, loanYears:35, loanRate:0.8 },
     lifestyle:{ luxury:0.75, diningOutPerWeek:4, commute:0.7 },
     children:[ { birthParentAge:32, track:'private' }, { birthParentAge:34, track:'private' } ],
@@ -459,8 +459,8 @@ function computeRequiredMonthlyInvestment(gapPV, s){
   const annualPmt = pmtFromPV(gapPV, s.investment.returnRate, n);
   return annualPmt/12;
 }
-function simulateNetWorth(timeline, pmt, s){
-  const r = s.investment.returnRate;
+function simulateNetWorth(timeline, pmt, s, rateOverride){
+  const r = rateOverride!=null ? rateOverride : s.investment.returnRate;
   let balance = s.profile.currentSavings;
   const series=[];
   for(const row of timeline){
@@ -471,8 +471,33 @@ function simulateNetWorth(timeline, pmt, s){
   return series;
 }
 function depletionAge(netWorthSeries){
-  const first = netWorthSeries.find(p=>p.balance<0);
+  const first = netWorthSeries.find(p=>p.balance < -1000); // 丸め誤差(数円)を枯渇と誤判定しない
   return first ? first.age : null;
+}
+// 運用益がその年の積立額を追い越す年齢(お金が「働く側」に回る転換点)
+function crossoverAge(netWorthSeries, timeline, pmt, s){
+  const r = s.investment.returnRate;
+  let prev = s.profile.currentSavings;
+  for(let i=0;i<netWorthSeries.length;i++){
+    const contributing = timeline[i].age < s.retirement.retireAge;
+    if(contributing && prev*r > pmt*12 && pmt>0) return timeline[i].age;
+    prev = netWorthSeries[i].balance;
+  }
+  return null;
+}
+// 積立の「卒業」年齢: その年以降の積立をゼロにしても、100歳まで資産が持つ最初の年
+function coastAge(timeline, pmt, s){
+  const r = s.investment.returnRate;
+  for(let stop=0; stop<timeline.length; stop++){
+    let bal = s.profile.currentSavings;
+    for(let i=0;i<timeline.length;i++){
+      const row = timeline[i];
+      const contributing = row.age < s.retirement.retireAge && i < stop;
+      bal = bal*(1+r) + (contributing? pmt*12:0) + row.netCashflow;
+    }
+    if(bal >= -1000) return timeline[stop] ? timeline[stop].age : null; // 丸め誤差を許容
+  }
+  return null;
 }
 function computeMetrics(s){
   const timeline = buildTimeline(s);
@@ -877,7 +902,39 @@ function renderNetWorthSection(metrics){
   const { timeline, pmt } = metrics;
   const effectivePmt = state.investment.pmtOverride!=null ? state.investment.pmtOverride : pmt;
   const netWorth = simulateNetWorth(timeline, effectivePmt, state);
-  renderLineChart(document.getElementById('networth-chart'), netWorth, { lines:[ {key:'balance', label:'純資産残高', color:'var(--good)'} ] });
+  const bankWorth = simulateNetWorth(timeline, effectivePmt, state, 0); // 同じ積立を運用せず貯金だけにした場合
+  const merged = netWorth.map((p,i)=>({ age:p.age, balance:p.balance, bankBalance:bankWorth[i].balance }));
+  renderLineChart(document.getElementById('networth-chart'), merged, {
+    lines:[ {key:'balance', label:'運用した場合', color:'var(--good)'}, {key:'bankBalance', label:'貯金だけの場合(利回り0%)', color:'var(--text-dim)'} ],
+    legend: true,
+  });
+
+  // 積立が「備え」に育っていく道のりのマイルストーン
+  const msEl = document.getElementById('networth-milestones');
+  const ms = [];
+  const cross = crossoverAge(netWorth, timeline, effectivePmt, state);
+  if(cross){
+    const idx = timeline.findIndex(r=>r.age===cross);
+    const prevBal = idx>0 ? netWorth[idx-1].balance : state.profile.currentSavings;
+    const gain = prevBal * state.investment.returnRate;
+    ms.push(`🚀 <strong>${cross}歳</strong>: 資産の運用益(年${fmtMan1(gain)})が、あなたの年間積立(${fmtMan1(effectivePmt*12)})を追い越します。ここからはお金が主に働く側です。`);
+  }
+  const coast = coastAge(timeline, effectivePmt, state);
+  if(coast!=null && coast < state.retirement.retireAge) ms.push(`🎓 <strong>${coast}歳</strong>: 積立を"卒業"できます。以降は1円も積み立てなくても、資産の成長だけで100歳まで届く計算です。`);
+  else if(coast!=null) ms.push(`🎓 <strong>${coast}歳(退職)</strong>で積立は完了。多めに積むほど"卒業"は早まります(上のスライダーで試せます)。`);
+  const bankDep = depletionAge(bankWorth);
+  const investDep = depletionAge(netWorth);
+  if(!investDep && bankDep) ms.push(`🏦 同じ月${fmtMan1(effectivePmt)}でも、貯金だけだと<strong>${bankDep}歳で尽きます</strong>。運用が肩代わりしてくれる分の差です。`);
+  const g = state.profile.incomeGrowthRate||0;
+  if(g>0 && effectivePmt>0 && state.profile.currentIncome>0){
+    const yearsToRetire = state.retirement.retireAge - state.profile.currentAge;
+    const ratioNow = effectivePmt/(state.profile.currentIncome*state.investment.netIncomeRatio/12);
+    const ratioLater = effectivePmt/(state.profile.currentIncome*Math.pow(1+g, yearsToRetire-1)*state.investment.netIncomeRatio/12);
+    ms.push(`💸 毎月${fmtMan1(effectivePmt)}の重さは、いまは手取りの<strong>${Math.round(ratioNow*100)}%</strong> → 昇給率${(g*100).toFixed(1)}%なら退職直前には<strong>${Math.round(ratioLater*100)}%</strong>まで軽くなり、自由に使えるお金が年々増えていきます。`);
+  }else if(effectivePmt>0){
+    ms.push(`💸 「基本情報 > 詳細設定」で昇給率を入れると、同じ積立額が年々軽くなっていく様子も見られます。`);
+  }
+  msEl.innerHTML = ms.length ? `<div class="warn-box" style="border-color:var(--good); background:rgba(26,143,94,.06);">${ms.map(m=>`<p style="margin:.25rem 0">${m}</p>`).join('')}</div>` : '';
 
   const msgEl = document.getElementById('pmt-override-message');
   if(state.investment.pmtOverride!=null){
@@ -1380,9 +1437,11 @@ function buildResultsStep(){
     <div id="attribution-section"></div>
     <h3>年次キャッシュフロー（黒字/赤字）</h3>
     <div class="chart-wrap" id="cashflow-chart"></div>
-    <h3>純資産推移シミュレーション</h3>
+    <h3>積立が「十分な備え」に育つまで</h3>
+    <p class="hint">最初はあなたがお金を運びますが、途中から複利が主役になります。積立額を変えて、物語がどう変わるか試してみてください。</p>
     <div id="pmt-override-control"></div>
     <div id="pmt-override-message"></div>
+    <div id="networth-milestones"></div>
     <div class="chart-wrap" id="networth-chart"></div>
     <h3>ライフステージ別 必要年収テーブル</h3>
     <div class="chart-wrap">
